@@ -1,0 +1,6 @@
+.vs
+Debug
+Release
+VolumeController/Debug
+VolumeController/Release
+VolumeController/tester.cpp
