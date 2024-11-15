@@ -37,7 +37,7 @@ bool VolumeManager::initialize() {
 }
 
 vector<wstring> VolumeManager::scanOutputDevices() {
-	vector<wstring> result;
+	outputDevicesNames.clear();
 	outputDevices.Release();
 	deviceEnumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &outputDevices);
 	
@@ -47,24 +47,16 @@ vector<wstring> VolumeManager::scanOutputDevices() {
 	for (UINT i = 0; i < count; i++) {
 		CComPtr<IMMDevice> device;
 		outputDevices->Item(i, &device);
-
-		CComPtr<IPropertyStore> props;
-		device->OpenPropertyStore(STGM_READ, &props);
-
-		PROPVARIANT prop;
-		PropVariantInit(&prop);
-		props->GetValue(PKEY_Device_FriendlyName, &prop);
 		
-		if (prop.vt != VT_EMPTY) {
-			result.push_back(wstring(prop.pwszVal));
+		wstring devName = Utils::getIMMDeviceProperty(device, PKEY_Device_FriendlyName);
+		if (devName != L"") {
+			outputDevicesNames.push_back(devName);
 		}
 		else {
-			result.push_back(wstring(L"error: device does not have a friendly name"));
+			outputDevicesNames.push_back(wstring(L"error: device does not have a friendly name"));
 			MessageBox(NULL, L"device does not have a friendly name", L"VolumeController", 0);
 		}
 
-		PropVariantClear(&prop);
-		props.Release();
 		device.Release();
 	}
 
@@ -72,7 +64,7 @@ vector<wstring> VolumeManager::scanOutputDevices() {
 		useDefaultOutputDevice();
 	else if (deviceNameToUse != L"")
 		useOutputDevice(deviceNameToUse);
-	return result;
+	return outputDevicesNames;
 }
 /*
 vector<wstring> VolumeManager::scanInputDevices() {
@@ -117,35 +109,17 @@ void VolumeManager::useOutputDevice(wstring name) {
 	deviceNameToUse = name;
 	if (!outputDevices) return;
 	currentDevice.Release();
+
 	UINT count;
 	outputDevices->GetCount(&count);
 	for (int i = 0; i < count; i++) {
-		CComPtr<IMMDevice> device;
-		outputDevices->Item(i, &device);
-
-		CComPtr<IPropertyStore> props;
-		device->OpenPropertyStore(STGM_READ, &props);
-
-		PROPVARIANT prop;
-		PropVariantInit(&prop);
-		props->GetValue(PKEY_Device_FriendlyName, &prop);
-
-		if (prop.vt != VT_EMPTY) {
-			wstring n = prop.pwszVal;
-			if (n == name) {
-				currentDevice = device;
-				initCurrentOutputDevice();
-				wcout << L"using device " << name << endl;
-				PropVariantClear(&prop);
-				props.Release();
-				device.Release();
-				return;
-			}
+		if (outputDevicesNames[i] == deviceNameToUse) {
+			outputDevices->Item(i, &currentDevice);
+			initCurrentOutputDevice();
+			wcout << L"using device: " << name << endl;
+			discoverSessions();
+			return;
 		}
-
-		PropVariantClear(&prop);
-		props.Release();
-		device.Release();
 	}
 	wcout << L"device not found: " << name << endl;
 }
@@ -155,7 +129,8 @@ void VolumeManager::useDefaultOutputDevice() {
 	currentDevice.Release();
 	deviceEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &currentDevice);
 	initCurrentOutputDevice();
-	cout << "using default output device" << endl;
+	wcout << L"using default output device: " << Utils::getIMMDeviceProperty(currentDevice, PKEY_Device_FriendlyName) << endl;
+	discoverSessions();
 }
 
 void VolumeManager::setOutputDeviceVolume(float volume) {
@@ -192,18 +167,21 @@ bool VolumeManager::getOutputDeviceMute() {
 void VolumeManager::initCurrentOutputDevice() {
 	currentDeviceVolume.Release();
 	currentDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, NULL, (void**) &currentDeviceVolume);
-	sessionEnumerator.Release();
 	if (sessionManager) {
-		cout << "UNREGISTER" << endl;
+		cout << "UNREGISTER session notification" << endl;
 		sessionManager->UnregisterSessionNotification(sessionNotification);
 	}
 	sessionManager.Release();
 	currentDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**) &sessionManager);
-	sessionManager->GetSessionEnumerator(&sessionEnumerator);
+
+	cout << "REGISTER session notification" << endl;
 	sessionManager->RegisterSessionNotification(sessionNotification);
+
+	CComPtr<IAudioSessionEnumerator> sessionEnumerator;
+	sessionManager->GetSessionEnumerator(&sessionEnumerator);
 	int count;
-	sessionEnumerator->GetCount(&count);
-	cout << "REGISTER" << endl;
+	sessionEnumerator->GetCount(&count); // required to start receiving session notifications
+	sessionEnumerator.Release();
 }
 
 
@@ -237,6 +215,8 @@ vector<AudioSession> VolumeManager::discoverSessions() {
 		session.volume.Release();
 	audioSessions.clear();
 
+	CComPtr<IAudioSessionEnumerator> sessionEnumerator;
+	sessionManager->GetSessionEnumerator(&sessionEnumerator);
 	int count;
 	sessionEnumerator->GetCount(&count);
 	for (int i = 0; i < count; i++) {
@@ -261,6 +241,7 @@ vector<AudioSession> VolumeManager::discoverSessions() {
 		sessionControl.Release();
 	}
 
+	sessionEnumerator.Release();
 	return audioSessions;
 }
 

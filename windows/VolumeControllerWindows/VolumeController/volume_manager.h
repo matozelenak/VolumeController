@@ -50,6 +50,7 @@ private:
 	int sessionNameToIndex(std::wstring name);
 	CComPtr<IMMDeviceEnumerator> deviceEnumerator;
 	CComPtr<IMMDeviceCollection> outputDevices;
+	std::vector<std::wstring> outputDevicesNames;
 	CComPtr<IMMDevice> currentDevice;
 	CComPtr<IAudioEndpointVolume> currentDeviceVolume;
 	bool useDefOutDevice;
@@ -57,7 +58,6 @@ private:
 	void initCurrentOutputDevice();
 
 	CComPtr<IAudioSessionManager2> sessionManager;
-	CComPtr<IAudioSessionEnumerator> sessionEnumerator;
 	std::vector<AudioSession> audioSessions;
 	SessionCreatedNotification* sessionNotification;
 
