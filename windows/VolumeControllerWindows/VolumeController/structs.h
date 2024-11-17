@@ -17,3 +17,8 @@ struct InputDevice {
 	std::wstring friedlyName;
 	CComPtr<IAudioEndpointVolume> volume;
 };
+
+struct Channel {
+	int id;
+	std::vector<std::wstring> sessions;
+};

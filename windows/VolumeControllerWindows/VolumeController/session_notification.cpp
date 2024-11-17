@@ -4,6 +4,10 @@
 #include <iostream>
 using namespace std;
 
+SessionCreatedNotification::SessionCreatedNotification(HWND hWnd) {
+	this->hWnd = hWnd;
+}
+
 ULONG STDMETHODCALLTYPE SessionCreatedNotification::AddRef() {
 	return InterlockedIncrement(&refCount);
 }
@@ -39,5 +43,6 @@ HRESULT STDMETHODCALLTYPE SessionCreatedNotification::OnSessionCreated(IAudioSes
 	sessionControl2.Release();
 
 	cout << "session created, pid: " << pid << endl;
+	PostMessage(hWnd, MSG_SESSION_DISCOVERED, 0, 0);
 	return S_OK;
 }
