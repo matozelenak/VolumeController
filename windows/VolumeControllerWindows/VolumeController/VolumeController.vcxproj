@@ -139,19 +139,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="channel_map.cpp" />
+    <ClCompile Include="controller.cpp" />
     <ClCompile Include="io.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="tester.cpp" />
     <ClCompile Include="session_notification.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="volume_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="audio_session.h" />
-    <ClInclude Include="channel_map.h" />
+    <ClInclude Include="globals.h" />
+    <ClInclude Include="structs.h" />
+    <ClInclude Include="controller.h" />
     <ClInclude Include="io.h" />
-    <ClInclude Include="main.h" />
     <ClInclude Include="session_notification.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="volume_manager.h" />
