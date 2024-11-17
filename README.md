@@ -2,12 +2,18 @@
 
 ## Obsah
 
+- [Softvér](#softvér)
 - [3D tlač](#3d-tlač)
 - [Zoznam súčiastok](#zoznam-súčiastok)
 - [Zapojenie](#zapojenie)
 - [Zloženie](#zloženie)
 - [Výsledok](#výsledok)
-- [Softvér](#softvér)
+
+## Softvér
+
+- [Arduino kód](arduino/README.md)
+- [Softvér na Windows](windows/README.md)
+- [Softvér na Linux](linux/README.md)
 
 ## 3D tlač
 
@@ -79,9 +85,3 @@ Led pásik treba postrihať na samostatné ledky, ktoré treba nalepiť na led k
 
 ![VolumeController1](images/volumecontroller_1.jpg)
 ![VolumeController2](images/volumecontroller_2.jpg)
-
-## Softvér
-
-- [Arduino kód](arduino/README.md)
-- [Softvér na Windows](windows/README.md)
-- [Softvér na Linux](linux/README.md)
