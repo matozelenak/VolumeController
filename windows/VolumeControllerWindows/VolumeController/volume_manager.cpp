@@ -22,7 +22,7 @@ VolumeManager::~VolumeManager() {
 	cleanup();
 }
 
-bool VolumeManager::initialize() {
+bool VolumeManager::initialize(HWND hWnd) {
 	if (CoInitialize(NULL) != S_OK) {
 		return false;
 	}
@@ -31,7 +31,7 @@ bool VolumeManager::initialize() {
 		return false;
 	}
 
-	sessionNotification = new SessionCreatedNotification();
+	sessionNotification = new SessionCreatedNotification(hWnd);
 
 	return true;
 }
@@ -66,43 +66,6 @@ vector<wstring> VolumeManager::scanOutputDevices() {
 		useOutputDevice(deviceNameToUse);
 	return outputDevicesNames;
 }
-/*
-vector<wstring> VolumeManager::scanInputDevices() {
-	for (InputDevice& device : this->inputDevices)
-		device.volume.Release();
-	this->inputDevices.clear();
-
-	CComPtr<IMMDeviceCollection> inputDevices;
-	deviceEnumerator->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &inputDevices);
-
-	UINT count;
-	inputDevices->GetCount(&count);
-
-	for (UINT i = 0; i < count; i++) {
-		CComPtr<IMMDevice> device;
-		inputDevices->Item(i, &device);
-
-		CComPtr<IPropertyStore> props;
-		device->OpenPropertyStore(STGM_READ, &props);
-
-		PROPVARIANT prop;
-		PropVariantInit(&prop);
-		props->GetValue(PKEY_Device_FriendlyName, &prop);
-
-		InputDevice dev;
-		dev.friedlyName = prop.vt != VT_EMPTY ? wstring(prop.pwszVal) : L"error: device does not have a friendly name";
-		device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, NULL, (void**)&dev.volume);
-		this->inputDevices.push_back(dev);
-
-		PropVariantClear(&prop);
-
-	}
-}
-*/
-
-
-
-
 
 void VolumeManager::useOutputDevice(wstring name) {
 	useDefOutDevice = false;
@@ -184,28 +147,9 @@ void VolumeManager::initCurrentOutputDevice() {
 	sessionEnumerator.Release();
 }
 
-
-/*
-void VolumeManager::setInputDeviceVolume(float volume) {
-
-}
-
-float VolumeManager::getInputDeviceVolume() {
-	return 0;
-}
-
-void VolumeManager::setInputDeviceMute(bool mute) {
-
-}
-
-bool VolumeManager::getInputDeviceMute() {
-	return false;
-}
-*/
-
-
-
-
+//==========================================================
+//====================AUDIO SESSIONS========================
+//==========================================================
 
 vector<AudioSession> VolumeManager::discoverSessions() {
 	if (!currentDevice) return vector<AudioSession>();
