@@ -4,13 +4,15 @@
 #include <queue>
 #include <mutex>
 
+#include "structs.h"
+
 class IO {
 	
 public:
-	IO(HWND hWnd);
+	IO(HWND hWnd, Config* config);
 	~IO();
 
-	bool initSerialPort(std::wstring portName, DWORD baudRate);
+	bool initSerialPort();
 	void closeSerialPort();
 	void cleanup();
 
@@ -23,8 +25,7 @@ private:
 	static DWORD WINAPI threadRoutineStatic(LPVOID lpParam);
 	void threadRoutine();
 
-	std::wstring portName;
-	DWORD baudRate;
+	Config* config;
 	HANDLE hSerialPort;
 	bool serialConnected;
 

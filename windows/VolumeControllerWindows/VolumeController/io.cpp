@@ -8,7 +8,8 @@
 using namespace std;
 #define LOCK_QUEUE() lock_guard<mutex> lock(qMutex)
 
-IO::IO(HWND hWnd) {
+IO::IO(HWND hWnd, Config* config) {
+	this->config = config;
 	hSerialPort = NULL;
 	serialConnected = false;
 	hThread = NULL;
@@ -25,13 +26,11 @@ IO::~IO() {
 	cleanup();
 }
 
-bool IO::initSerialPort(wstring portName, DWORD baudRate) {
+bool IO::initSerialPort() {
 	if (serialConnected) return false;
 	while (!messages.empty()) messages.pop();
-	this->portName = portName;
-	this->baudRate = baudRate;
-	wcout << L"opening serial port " << portName << L", baud: " << baudRate << endl;
-	hSerialPort = CreateFile(portName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	wcout << L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl;
+	hSerialPort = CreateFile(config->portName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (hSerialPort == INVALID_HANDLE_VALUE) {
 		Utils::printLastError(L"CreateFile");
 		return false;
@@ -68,7 +67,7 @@ void IO::cleanup() {
 bool IO::setCommParameters() {
 	DCB dcb = { 0 };
 	dcb.DCBlength = sizeof(DCB);
-	dcb.BaudRate = baudRate;
+	dcb.BaudRate = config->baudRate;
 	dcb.fBinary = TRUE;
 	dcb.fParity = TRUE;
 	dcb.fOutxCtsFlow = FALSE;
@@ -83,7 +82,7 @@ bool IO::setCommParameters() {
 	dcb.fRtsControl = RTS_CONTROL_ENABLE;
 	dcb.fAbortOnError = FALSE;
 	dcb.ByteSize = 8;
-	dcb.Parity = EVENPARITY;
+	dcb.Parity = config->parity;
 	dcb.StopBits = ONESTOPBIT;
 
 	if (!SetCommState(hSerialPort, &dcb)) {
