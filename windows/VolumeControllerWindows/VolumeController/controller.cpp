@@ -9,15 +9,9 @@
 #include <sstream>
 using namespace std;
 
-Controller::Controller(VolumeManager* mgr) {
+Controller::Controller(VolumeManager* mgr, Config* config) {
 	this->mgr = mgr;
-
-	configTmp.push_back(vector<wstring>());
-	configTmp.push_back(vector<wstring>());
-	configTmp.push_back(vector<wstring>());
-	configTmp[0].push_back(L"master");
-	configTmp[1].push_back(L"system");
-	configTmp[2].push_back(L"other");
+	this->config = config;
 }
 
 Controller::~Controller() {
@@ -38,16 +32,16 @@ void Controller::mapChannels() {
 	vector<bool> chVolUsed(sessions.size());
 	int chVolOther = -1;
 	// iterate channels
-	for (int i = 0; i < configTmp.size(); i++) {
+	for (int i = 0; i < config->channels.size(); i++) {
 		// iterate applications for that channel
-		for (int j = 0; j < configTmp[i].size(); j++) {
-			if (configTmp[i][j] != L"other") {
+		for (int j = 0; j < config->channels[i].size(); j++) {
+			if (config->channels[i][j] != L"other") {
 
-				channels[i].sessions.push_back(configTmp[i][j]);
+				channels[i].sessions.push_back(config->channels[i][j]);
 
 				// find which one is it
 				for (int k = 0; k < sessions.size(); k++) {
-					if (sessions[k].filename == configTmp[i][j]) {
+					if (sessions[k].filename == config->channels[i][j]) {
 						chVolUsed[k] = true;
 						break;
 					}
@@ -66,10 +60,6 @@ void Controller::mapChannels() {
 				channels[chVolOther].sessions.push_back(sessions[i].filename);
 		}
 	}
-}
-
-void Controller::readConfig() {
-	// TODO
 }
 
 void Controller::adjustVolume(int ch, int value) {
