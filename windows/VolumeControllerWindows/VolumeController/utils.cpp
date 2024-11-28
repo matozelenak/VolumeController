@@ -1,6 +1,8 @@
 #include "utils.h"
 #include <iostream>
 #include <string>
+#include <codecvt>
+#include <locale>
 
 #include <Windows.h>
 #include <Psapi.h>
@@ -68,4 +70,15 @@ wstring Utils::printLastError(wstring functionName) {
 	}
 	wcerr << result << endl;
 	return result;
+}
+
+
+wstring_convert<codecvt_utf8<wchar_t>> Utils::utf8_conv;
+
+wstring Utils::strToWstr(string& str) {
+	return utf8_conv.from_bytes(str);
+}
+
+string Utils::wStrToStr(wstring& wstr) {
+	return utf8_conv.to_bytes(wstr);
 }
