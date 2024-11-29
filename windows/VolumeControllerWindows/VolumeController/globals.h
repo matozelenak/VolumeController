@@ -9,3 +9,11 @@
 #define ID_TRAY_EXIT 1002
 #define ID_TRAY_RECONNECT 1003
 #define ID_TRAY_RESCAN_SESSIONS 1004
+
+#ifdef DEBUG
+	#define DBG_PRINT(msg) cout << msg;
+	#define DBG_PRINTW(MSG) wcout << msg;
+#else
+	#define DBG_PRINT(msg)
+	#define DBG_PRINTW(msg)
+#endif
