@@ -24,10 +24,10 @@ struct Channel {
 };
 
 struct Config {
-	boolean error;
-	std::wstring portName;
-	DWORD baudRate;
-	BYTE parity;
-	std::wstring deviceName;
+	boolean error = false;
+	std::wstring portName = L"";
+	DWORD baudRate = 115200;
+	BYTE parity = EVENPARITY;
+	std::wstring deviceName = L"default";
 	std::vector<std::vector<std::wstring>> channels;
 };

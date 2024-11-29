@@ -11,18 +11,115 @@
 #include <vector>
 #include <Windows.h>
 #include <shellapi.h>
+#include <fstream>
+#include <codecvt>
+#include "json/json.hpp"
+
+using json = nlohmann::json;
 using namespace std;
 
+const char* CONFIG_FILE = "config.json";
 void makeConsole();
 
 VolumeManager* vol = nullptr;
 IO* io = nullptr;
 Controller* controller = nullptr;
-wstring comPortName;
-DWORD comPortBaud;
+Config config;
 
 HWND hWnd = NULL;
 HMENU hTrayMenu = NULL;
+
+void readConfig() {
+	config.error = false;
+	config.channels.clear();
+	for (int i = 0; i < 6; i++)
+		config.channels.push_back(vector<wstring>());
+
+	ifstream f(CONFIG_FILE);
+	json doc;
+	try {
+		doc = json::parse(f);
+	} catch (const json::parse_error& e) {
+		DBG_PRINT("JSON parse error: " << e.what() << endl);
+		config.error = true;
+		return;
+	}
+
+	if (doc.contains("port")) {
+		string s = doc["port"];
+		config.portName = Utils::strToWstr(s);
+	}
+	else
+		config.portName = L"COM1";
+
+	if (doc.contains("baud"))
+		config.baudRate = doc["baud"];
+	else
+		config.baudRate = 115200;
+
+	if (doc.contains("parity")) {
+		string parity = doc["parity"];
+		if (parity == "EVEN")
+			config.parity = EVENPARITY;
+		else if (parity == "ODD")
+			config.parity = ODDPARITY;
+		else
+			config.parity = NOPARITY;
+	}
+	else
+		config.parity = NOPARITY;
+
+	if (doc.contains("device")) {
+		string dev = doc["device"];
+		config.deviceName = Utils::strToWstr(dev);
+	}
+	else
+		config.deviceName = L"default";
+
+	if (doc.contains("channels")) {
+		json cfgChannels = doc["channels"];
+		for (auto ch : cfgChannels) {
+			int id = ch["id"];
+			if (id >= 0 && id <= 5) {
+				for (string strSession : ch["sessions"]) {
+					config.channels[id].push_back(Utils::strToWstr(strSession));
+				}
+
+			}
+		}
+	}
+}
+
+void writeConfig() {
+	json doc;
+	doc["port"] = Utils::wStrToStr(config.portName);
+	doc["baud"] = (int)config.baudRate;
+	if (config.parity == EVENPARITY)
+		doc["parity"] = "EVEN";
+	else if (config.parity == ODDPARITY)
+		doc["parity"] = "ODD";
+	else
+		doc["parity"] = "NONE";
+	doc["device"] = Utils::wStrToStr(config.deviceName);
+
+	json channels = json::array();
+	for (int i = 0; i < config.channels.size(); i++) {
+		vector<wstring>& vecChannel = config.channels[i];
+		json channel;
+		channel["id"] = i;
+		channel["sessions"] = json::array();
+		for (wstring& wstrSessionName : vecChannel)
+			channel["sessions"].push_back(Utils::wStrToStr(wstrSessionName));
+
+		channels.push_back(channel);
+	}
+
+	doc["channels"] = channels;
+
+	ofstream out(CONFIG_FILE);
+	out << doc.dump() << endl;
+	out.close();
+}
 
 void cleanup() {
     delete io;
@@ -52,7 +149,7 @@ void parseMessage(string msg) {
 					int value = stoi(strValue);
 
 					if (chID >= 0 && chID <= 5 && value >= 0 && value <= 100) {
-						cout << "Channel " << chID << ": " << value << endl;
+						DBG_PRINT("Channel " << chID << ": " << value << endl);
 						controller->adjustVolume(chID, value);
 					}
 				}
@@ -70,7 +167,7 @@ void parseMessage(string msg) {
 					int value = stoi(strValue);
 
 					if (chID >= 0 && chID <= 5 && (value == 0 || value == 1)) {
-						cout << "Channel " << chID << ": " << (value ? "mute" : "unmute") << endl;
+						DBG_PRINT("Channel " << chID << ": " << (value ? "mute" : "unmute") << endl);
 						controller->adjustMute(chID, value ? true : false);
 					}
 				}
@@ -112,7 +209,7 @@ void ShowTrayMenu(HWND hWnd) {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
 	case WM_DESTROY:
-		cout << "WM_DESTROY" << endl;
+		DBG_PRINT("WM_DESTROY" << endl);
 		PostQuitMessage(0);
 		break;
 	case MSG_NOTIFYICON_CLICKED:
@@ -142,7 +239,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			MessageBox(hWnd, L"This will open GUI", L"Volume Controller", MB_OK);
 			break;
 		case ID_TRAY_RECONNECT:
-			io->initSerialPort(comPortName, comPortBaud);
+			io->initSerialPort();
 			break;
 		case ID_TRAY_RESCAN_SESSIONS:
 			controller->mapChannels();
@@ -188,22 +285,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	lstrcpy(nid.szTip, L"VolumeController");
 	Shell_NotifyIcon(NIM_ADD, &nid);
 
-
+	readConfig();
+	writeConfig();
 
     vol = new VolumeManager();
-    io = new IO(hWnd);
-	comPortName = L"COM3";
-	comPortBaud = CBR_115200;
+    io = new IO(hWnd, &config);
 
     if (!vol->initialize(hWnd)) {
         cleanup();
         return 0;
     }
-    vol->useDefaultOutputDevice();
-	controller = new Controller(vol);
+	vol->scanOutputDevices();
+	if (config.deviceName == L"default") {
+		vol->useDefaultOutputDevice();
+	}
+	else {
+		vol->useOutputDevice(config.deviceName);
+	}
+	controller = new Controller(vol, &config);
 	controller->mapChannels();
 
-	io->initSerialPort(comPortName, comPortBaud);
+	io->initSerialPort();
 
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) {
