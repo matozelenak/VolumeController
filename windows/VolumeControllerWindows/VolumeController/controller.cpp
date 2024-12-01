@@ -2,6 +2,7 @@
 #include "volume_manager.h"
 #include "io.h"
 #include "structs.h"
+#include "utils.h"
 
 #include <vector>
 #include <string>
@@ -89,11 +90,11 @@ string Controller::makeMuteRequest() {
 }
 
 string Controller::makeVolumeCmd() {
-	return "";
+	return ""; // TODO
 }
 
 string Controller::makeMuteCmd() {
-	vector<bool> chMute(6);
+	vector<int> chMute(6);
 	for (Channel& channel : channels) {
 		for (wstring session : channel.sessions) {
 			if (session == L"master") {
@@ -114,17 +115,11 @@ string Controller::makeMuteCmd() {
 		;
 	}
 
-	stringstream ss;
-	ss << "!M:";
-	for (bool b : chMute)
-		ss << (b ? "1|" : "0|");
-	ss << "\n";
-
-	return ss.str();
+	return Utils::makeCmdAllVals('M', chMute);
 }
 
 string Controller::makeActiveDataCmd() {
-	vector<bool> chActive(6);
+	vector<int> chActive(6);
 	for (Channel& channel : channels) {
 		for (wstring session : channel.sessions) {
 			if (session == L"master") {
@@ -145,13 +140,7 @@ string Controller::makeActiveDataCmd() {
 		;
 	}
 
-	stringstream ss;
-	ss << "!A:";
-	for (bool b : chActive)
-		ss << (b ? "1|" : "0|");
-	ss << "\n";
-
-	return ss.str();
+	return Utils::makeCmdAllVals('A', chActive);
 }
 
 void Controller::update(IO* io) {

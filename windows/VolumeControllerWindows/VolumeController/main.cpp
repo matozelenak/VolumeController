@@ -136,36 +136,43 @@ void parseMessage(string msg) {
 	if (msg[0] == '!') {
 		// command
 		if (msg.size() >= 4) {
-			// adjust volume
-			if (msg[1] == 'V') {
-				if (msg[2] == ':') {
-
-				}
-				else {
-					size_t colon = msg.find(':', 0);
-					string strChID  = msg.substr(2, colon);
-					int chID = stoi(strChID);
-					string strValue = msg.substr(colon + 1, string::npos);
-					int value = stoi(strValue);
-
-					if (chID >= 0 && chID <= 5 && value >= 0 && value <= 100) {
-						DBG_PRINT("Channel " << chID << ": " << value << endl);
-						controller->adjustVolume(chID, value);
+			char cmd = msg[1];
+			if (msg[2] == ':') {
+				// all values
+				vector<int> values = Utils::parseCmdAllVals(msg);
+				switch (cmd) {
+				case 'V':
+					for (int i = 0; i < 6; i++) {
+						int value = values[i];
+						if (value >= 0 && value <= 100) {
+							DBG_PRINT("Channel " << i << ": " << value << "%" << endl);
+							controller->adjustVolume(i, value);
+						}
 					}
+					break;
+				case 'M':
+					for (int i = 0; i < 6; i++) {
+						int value = values[i];
+						if (value >= 0 && value <= 1) {
+							DBG_PRINT("Channel " << i << ": " << (value ? "mute" : "unmute") << endl);
+							controller->adjustMute(i, value);
+						}
+					}
+					break;
 				}
 			}
-			// mute/unmute
-			else if (msg[1] == 'M') {
-				if (msg[2] == ':') {
-
-				}
-				else {
-					size_t colon = msg.find(':', 0);
-					string strChID = msg.substr(2, colon);
-					int chID = stoi(strChID);
-					string strValue = msg.substr(colon + 1, string::npos);
-					int value = stoi(strValue);
-
+			else {
+				// one value
+				int chID;
+				int value = Utils::parseCmd1Val(msg, chID);
+				switch (cmd) {
+				case 'V':
+					if (chID >= 0 && chID <= 5 && value >= 0 && value <= 100) {
+						DBG_PRINT("Channel " << chID << ": " << value << "%" << endl);
+						controller->adjustVolume(chID, value);
+					}
+					break;
+				case 'M':
 					if (chID >= 0 && chID <= 5 && (value == 0 || value == 1)) {
 						DBG_PRINT("Channel " << chID << ": " << (value ? "mute" : "unmute") << endl);
 						controller->adjustMute(chID, value ? true : false);
@@ -177,13 +184,19 @@ void parseMessage(string msg) {
 	else if (msg[0] == '?') {
 		// request
 		if (msg.size() >= 2) {
-			if (msg[1] == 'A') {
+			char cmd = msg[1];
+			switch (cmd) {
+			case 'A':
 				// channel active data
 				io->send(controller->makeActiveDataCmd());
-			}
-			else if (msg[1] == 'M') {
+				break;
+			case 'M':
 				// mute data
 				io->send(controller->makeMuteCmd());
+				break;
+			case 'V':
+				// volume data
+				io->send(controller->makeVolumeCmd());
 			}
 		}
 	}
