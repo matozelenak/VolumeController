@@ -124,10 +124,13 @@ void readPotentiometers() {
         if (abs(pot.raw - raw) > 1) {
             // user changed the value
             pot.raw = raw;
-            channel[i].volume = round((100.0 / 255.0) * pot.raw); // map raw value (0-255) to (0-100)
-            if (connected) {
-                sendVolumeState(channel[i]);
-                cancelStandbyMode();
+            int val = round((100.0 / 255.0) * pot.raw); // map raw value (0-255) to (0-100)
+            if (abs(val - channel[i].volume) > 0) {
+                channel[i].volume = val;
+                if (connected) {
+                    sendVolumeState(channel[i]);
+                    cancelStandbyMode();
+                }
             }
         }
     }
