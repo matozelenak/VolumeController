@@ -22,3 +22,12 @@ struct Channel {
 	int id;
 	std::vector<std::wstring> sessions;
 };
+
+struct Config {
+	boolean error = false;
+	std::wstring portName = L"";
+	DWORD baudRate = 115200;
+	BYTE parity = EVENPARITY;
+	std::wstring deviceName = L"default";
+	std::vector<std::vector<std::wstring>> channels;
+};

@@ -7,11 +7,10 @@
 class Controller {
 
 public:
-	Controller(VolumeManager* mgr);
+	Controller(VolumeManager* mgr, Config* config);
 	~Controller();
 
 	void mapChannels();
-	void readConfig();
 
 	void adjustVolume(int ch, int val);
 	void adjustMute(int ch, bool mute);
@@ -27,8 +26,7 @@ public:
 	std::vector<AudioSession> getSessions();
 private:
 	VolumeManager* mgr;
+	Config* config;
 	std::vector<Channel> channels;
 	std::vector<AudioSession> sessions;
-
-	std::vector<std::vector<std::wstring>> configTmp;
 };

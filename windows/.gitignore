@@ -4,3 +4,4 @@ Release
 VolumeController/Debug
 VolumeController/Release
 VolumeController/tester.cpp
+VolumeControllerWindows/VolumeController/config.json
