@@ -11,14 +11,24 @@ using namespace std;
 IO::IO(HWND hWnd, Config* config) {
 	this->config = config;
 	hSerialPort = NULL;
+	hPipe = NULL;
 	serialConnected = false;
 	hThread = NULL;
+	hThreadPipe = NULL;
 	stopThread = false;
+	stopThreadPipe = false;
 	this->hWnd = hWnd;
 
 	hThread = CreateThread(NULL, 0, threadRoutineStatic, this, 0, NULL);
 	if (!hThread) {
 		Utils::printLastError(L"CreateThread");
+		return;
+	}
+
+	hThreadPipe = CreateThread(NULL, 0, threadPipeRoutineStatic, this, 0, NULL);
+	if (!hThreadPipe) {
+		Utils::printLastError(L"CreateThread");
+		return;
 	}
 }
 
@@ -60,6 +70,12 @@ void IO::cleanup() {
 		hThread = NULL;
 	}
 	closeSerialPort();
+	if (hThreadPipe) {
+		stopThreadPipe = true;
+		WaitForSingleObject(hThreadPipe, INFINITE);
+		CloseHandle(hThreadPipe);
+		hThreadPipe = NULL;
+	}
 }
 
 
@@ -191,4 +207,143 @@ void IO::send(string data) {
 		closeSerialPort();
 	}
 
+}
+
+DWORD WINAPI IO::threadPipeRoutineStatic(LPVOID lpParam) {
+	IO* instance = static_cast<IO*>(lpParam);
+	instance->threadPipeRoutine();
+	return 0;
+}
+
+void IO::threadPipeRoutine() {
+	while (!stopThreadPipe) {
+		OVERLAPPED olConnect = { 0 };
+		DBG_PRINT("Creating named pipe..." << endl);
+		hPipe = CreateNamedPipe(
+			PIPE_PATH, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+			PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+			1, 1024, 1024, 0, nullptr);
+
+		if (hPipe == INVALID_HANDLE_VALUE) {
+			Utils::printLastError(L"CreateNamedPipe");
+			return;
+		}
+
+		olConnect.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+		if (olConnect.hEvent == INVALID_HANDLE_VALUE) {
+			Utils::printLastError(L"CreateEvent");
+			CloseHandle(hPipe);
+			return;
+		}
+
+		// wait for a client to connect
+		bool connected = waitForPipeClient(olConnect);
+		if (!connected) {
+			CloseHandle(hPipe);
+			hPipe = NULL;
+			continue;
+		}
+
+		// client successfully connected
+		while (!stopThreadPipe) {
+			OVERLAPPED olRead = { 0 };
+			olRead.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+			if (olRead.hEvent == INVALID_HANDLE_VALUE) {
+				Utils::printLastError(L"CreateEvent");
+				break;
+			}
+			char buffer[1024];
+			DWORD bytesRead = 0;
+
+			BOOL success = ReadFile(hPipe, buffer, sizeof(buffer)-1, &bytesRead, &olRead);
+			if (!success) {
+				DWORD error = GetLastError();
+				if (error == ERROR_IO_PENDING) {
+					DWORD waitResult;
+					do {
+						waitResult = WaitForSingleObject(olRead.hEvent, 1000);
+						switch (waitResult) {
+						case WAIT_OBJECT_0:
+							if (GetOverlappedResult(hPipe, &olRead, &bytesRead, FALSE)) {
+								buffer[bytesRead] = '\0';
+								DBG_PRINT(bytesRead << " Received: '" << buffer << "'" << endl);
+							}
+							else {
+								Utils::printLastError(L"GetOverlappedResult");
+							}
+							break;
+						case WAIT_TIMEOUT:
+							//DBG_PRINT("Pipe read timeout" << endl); // TODO remove
+							break;
+						default:
+							Utils::printLastError(L"WaitForSingleObject");
+							break;
+						}
+
+					} while (waitResult == WAIT_TIMEOUT && !stopThreadPipe);
+				}
+				else if (error == ERROR_BROKEN_PIPE) {
+					DBG_PRINT("Pipe client disconnected." << endl);
+					break;
+				}
+				else {
+					Utils::printLastError(L"ReadFile");
+					break;
+				}
+				
+			}
+			else {
+				// ReadFile completed immediatelly
+				buffer[bytesRead] = '\0';
+				DBG_PRINT(bytesRead << " Immediatelly Received: '" << buffer << "'" << endl);
+			}
+
+			
+			CloseHandle(olRead.hEvent);
+
+		} // ReadFile loop
+
+		DBG_PRINT("Closing pipe..." << endl);
+		CloseHandle(hPipe);
+
+	} // CreateNamedPipe loop
+}
+
+bool IO::waitForPipeClient(OVERLAPPED& overlapped) {
+	bool result = false;
+	BOOL connected = ConnectNamedPipe(hPipe, &overlapped);
+	if (!connected) {
+		DWORD error = GetLastError();
+		if (error == ERROR_IO_PENDING) {
+			DWORD waitResult;
+			do {
+				// wait for connection
+				waitResult = WaitForSingleObject(overlapped.hEvent, 1000);
+				if (waitResult == WAIT_OBJECT_0) {
+					result = true;
+				}
+				else if (waitResult == WAIT_TIMEOUT) {
+					//DBG_PRINT("Client wait timeout" << endl); // TODO REMOVE
+				}
+				else {
+					Utils::printLastError(L"WaitForSingleObject");
+					break;
+				}
+
+			} while (waitResult != WAIT_OBJECT_0 && !stopThreadPipe);
+		}
+		else if (error == ERROR_PIPE_CONNECTED) {
+			result = true;
+		}
+		else {
+			Utils::printLastError(L"ConnectNamedPipe");
+		}
+	}
+	else {
+		result = true;
+	}
+
+	CloseHandle(overlapped.hEvent);
+
+	return result;
 }

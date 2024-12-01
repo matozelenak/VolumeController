@@ -10,9 +10,11 @@
 #define ID_TRAY_RECONNECT 1003
 #define ID_TRAY_RESCAN_SESSIONS 1004
 
+#define PIPE_NAME L"VolumeControllerPipe"
+
 #ifdef DEBUG
-	#define DBG_PRINT(msg) cout << msg;
-	#define DBG_PRINTW(MSG) wcout << msg;
+	#define DBG_PRINT(msg) std::cout << msg;
+	#define DBG_PRINTW(MSG) std::wcout << msg;
 #else
 	#define DBG_PRINT(msg)
 	#define DBG_PRINTW(msg)
