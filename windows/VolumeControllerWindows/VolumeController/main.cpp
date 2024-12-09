@@ -270,7 +270,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+	CreateMutex(NULL, TRUE, UNIQUE_MUTEX_NAME);
+	if (GetLastError() == ERROR_ALREADY_EXISTS) {
+		return 0;
+	}
+#ifdef DEBUG
     makeConsole();
+#endif
 
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProc,
 					  0, 0, hInstance, NULL, NULL, NULL, NULL,

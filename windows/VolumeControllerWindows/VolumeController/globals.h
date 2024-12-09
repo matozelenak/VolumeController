@@ -11,6 +11,7 @@
 #define ID_TRAY_RESCAN_SESSIONS 1004
 
 #define PIPE_NAME L"VolumeControllerPipe"
+#define UNIQUE_MUTEX_NAME L"VolumeControllerMutex"
 
 #ifdef DEBUG
 	#define DBG_PRINT(msg) std::cout << msg;
