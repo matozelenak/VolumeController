@@ -40,7 +40,9 @@ bool IO::initSerialPort() {
 	if (serialConnected) return false;
 	while (!messages.empty()) messages.pop();
 	wcout << L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl;
-	hSerialPort = CreateFile(config->portName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	wstring portPath = L"\\\\.\\";
+	portPath += config->portName;
+	hSerialPort = CreateFile(portPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (hSerialPort == INVALID_HANDLE_VALUE) {
 		Utils::printLastError(L"CreateFile");
 		return false;
