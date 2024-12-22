@@ -1,0 +1,15 @@
+{
+  "name": "volumecontroller-gui",
+  "version": "1.0.0",
+  "description": "GUI for Arduino Volume Controller",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron ."
+  },
+  "author": "matozelenak",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}
