@@ -4,5 +4,8 @@ contextBridge.exposeInMainWorld('versions', {
     node: () => process.versions.node,
     chrome: () => process.versions.chrome,
     electron: () => process.versions.electron,
-    ping: () => ipcRenderer.invoke('ping')
+    getConfig: () => ipcRenderer.invoke('gui:getConfig'),
+    connectPipe: () => ipcRenderer.send('gui:connectPipe'),
+    requestConfig: () => ipcRenderer.send('gui:requestConfig')
+    
 })

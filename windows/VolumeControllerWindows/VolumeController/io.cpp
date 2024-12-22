@@ -7,6 +7,8 @@
 #include <Windows.h>
 using namespace std;
 #define LOCK_QUEUE() lock_guard<mutex> lock(qMutex)
+#define LOCK_PIPE_QUEUE() lock_guard<mutex> lockPipe(qPipeMutex)
+
 
 IO::IO(HWND hWnd, Config* config) {
 	this->config = config;
@@ -17,6 +19,7 @@ IO::IO(HWND hWnd, Config* config) {
 	hThreadPipe = NULL;
 	stopThread = false;
 	stopThreadPipe = false;
+	pipeConnected = false;
 	this->hWnd = hWnd;
 
 	hThread = CreateThread(NULL, 0, threadRoutineStatic, this, 0, NULL);
@@ -219,6 +222,7 @@ DWORD WINAPI IO::threadPipeRoutineStatic(LPVOID lpParam) {
 
 void IO::threadPipeRoutine() {
 	while (!stopThreadPipe) {
+		pipeConnected = false;
 		OVERLAPPED olConnect = { 0 };
 		DBG_PRINT("Creating named pipe..." << endl);
 		hPipe = CreateNamedPipe(
@@ -239,8 +243,8 @@ void IO::threadPipeRoutine() {
 		}
 
 		// wait for a client to connect
-		bool connected = waitForPipeClient(olConnect);
-		if (!connected) {
+		pipeConnected = waitForPipeClient(olConnect);
+		if (!pipeConnected) {
 			CloseHandle(hPipe);
 			hPipe = NULL;
 			continue;
@@ -269,6 +273,9 @@ void IO::threadPipeRoutine() {
 							if (GetOverlappedResult(hPipe, &olRead, &bytesRead, FALSE)) {
 								buffer[bytesRead] = '\0';
 								DBG_PRINT(bytesRead << " Received: '" << buffer << "'" << endl);
+								LOCK_PIPE_QUEUE();
+								pipeMessages.push(buffer);
+								PostMessage(hWnd, MSG_PIPE_DATAARRIVED, 0, 0);
 							}
 							else {
 								Utils::printLastError(L"GetOverlappedResult");
@@ -298,15 +305,18 @@ void IO::threadPipeRoutine() {
 				// ReadFile completed immediatelly
 				buffer[bytesRead] = '\0';
 				DBG_PRINT(bytesRead << " Immediatelly Received: '" << buffer << "'" << endl);
+				LOCK_PIPE_QUEUE();
+				pipeMessages.push(buffer);
+				PostMessage(hWnd, MSG_PIPE_DATAARRIVED, 0, 0);
 			}
 
-			
 			CloseHandle(olRead.hEvent);
 
 		} // ReadFile loop
 
 		DBG_PRINT("Closing pipe..." << endl);
 		CloseHandle(hPipe);
+		pipeConnected = false;
 
 	} // CreateNamedPipe loop
 }
@@ -348,4 +358,70 @@ bool IO::waitForPipeClient(OVERLAPPED& overlapped) {
 	CloseHandle(overlapped.hEvent);
 
 	return result;
+}
+
+bool IO::hasPipeMessages() {
+	LOCK_PIPE_QUEUE();
+	return pipeMessages.size() > 0;
+}
+
+string IO::popPipeMessage() {
+	LOCK_PIPE_QUEUE();
+	if (pipeMessages.size() == 0) return string();
+	string msg = pipeMessages.front();
+	pipeMessages.pop();
+	return msg;
+}
+
+void IO::sendPipe(string data) {
+	if (!pipeConnected) return;
+
+	OVERLAPPED olWrite = { 0 };
+	olWrite.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+	if (olWrite.hEvent == INVALID_HANDLE_VALUE) {
+		Utils::printLastError(L"CreateEvent");
+		return;
+	}
+
+	DWORD bytesWritten;
+	BOOL w = WriteFile(hPipe, data.c_str(), data.size(), &bytesWritten, &olWrite);
+	if (!w) {
+		DWORD error = GetLastError();
+		if (error == ERROR_IO_PENDING) {
+			DWORD waitResult;
+			do {
+				// wait
+				waitResult = WaitForSingleObject(olWrite.hEvent, 1000);
+				if (waitResult == WAIT_OBJECT_0) {
+					// success
+					cout << "[TXpipe]: '" << data << "'" << endl;
+				}
+				else if (waitResult == WAIT_TIMEOUT) {
+					
+				}
+				else {
+					Utils::printLastError(L"WaitForSingleObject");
+					break;
+				}
+
+			} while (waitResult != WAIT_OBJECT_0 && !stopThreadPipe);
+		}
+		else if (error == ERROR_BROKEN_PIPE) {
+			DBG_PRINT("Write failed: pipe client disconnected." << endl);
+			Utils::printLastError(L"WriteFile");
+		}
+		else {
+			Utils::printLastError(L"WriteFile");
+		}
+	}
+	else if (bytesWritten == data.size()) {
+		// success
+		cout << "[TXpipe]: '" << data << "'" << endl;
+	}
+	else {
+		Utils::printLastError(L"WriteFile");
+	}
+
+	CloseHandle(olWrite.hEvent);
+
 }

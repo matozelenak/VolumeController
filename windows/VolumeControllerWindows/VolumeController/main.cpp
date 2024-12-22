@@ -30,6 +30,7 @@ HWND hWnd = NULL;
 HMENU hTrayMenu = NULL;
 
 void readConfig() {
+	config.doc = json();
 	config.error = false;
 	config.channels.clear();
 	for (int i = 0; i < 6; i++)
@@ -88,6 +89,8 @@ void readConfig() {
 			}
 		}
 	}
+
+	config.doc = doc;
 }
 
 void writeConfig() {
@@ -124,6 +127,25 @@ void writeConfig() {
 void cleanup() {
     delete io;
     delete vol;
+}
+
+void parsePipeMessage(string msg) {
+	json doc;
+	try {
+		doc = json::parse(msg);
+	}
+	catch (const json::parse_error& e) {
+		DBG_PRINT("JSON parse error: " << e.what() << endl);
+		return;
+	}
+	if (doc.contains("request")) {
+		string type = doc["request"];
+		if (type == "config") {
+			json data = json();
+			data["configFile"] = config.doc;
+			io->sendPipe(data.dump());
+		}
+	}
 }
 
 void parseMessage(string msg) {
@@ -237,6 +259,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	case MSG_DATAARRIVED:
 		while (io->hasMessages()) {
 			parseMessage(io->popMessage());
+		}
+		break;
+	case MSG_PIPE_DATAARRIVED:
+		while (io->hasPipeMessages()) {
+			parsePipeMessage(io->popPipeMessage());
 		}
 		break;
 	case MSG_CONNECTSUCCESS:
