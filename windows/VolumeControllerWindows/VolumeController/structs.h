@@ -5,6 +5,7 @@
 #include <audiopolicy.h>
 #include <endpointvolume.h>
 #include <atlbase.h>
+#include "json/json.hpp"
 
 struct AudioSession {
 	bool isSystemSounds;
@@ -30,4 +31,5 @@ struct Config {
 	BYTE parity = EVENPARITY;
 	std::wstring deviceName = L"default";
 	std::vector<std::vector<std::wstring>> channels;
+	nlohmann::json doc;
 };
