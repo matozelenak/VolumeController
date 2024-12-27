@@ -2,24 +2,31 @@
 <html>
     <head>
         <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Volume Controller GUI</title>
         <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     </head>
     <body>
         <div class="container status-bar">
-            <span class="text text-black"><span>backend:</span> <span class="text text-red" id="txt-backend-status">not connected</span> <span>controller:</span> <span class="text text-red" id="txt-controller-status">not connected</span></span>
-            <a href="#" class="btn text" id="btn-open-config">configure</a>
-            <a href="#" class="btn text" id="btn-get-config">get config</a>
-            <a href="#" class="btn text" id="btn-connect-pipe">connect pipe</a>
-            <a href="#" class="btn text" id="btn-request-config">request config</a>
+            <span class="status-bar-text text text-black"> 
+                <span>backend:</span> <span class="text-red" id="txt-backend-status">not connected</span> 
+                <span>controller:</span> <span class="text-red" id="txt-controller-status">not connected</span>
+            </span>
+            <span class="container status-bar-buttons">
+                <a href="#" class="btn text" id="btn-refresh" title="refresh"><i class="fa-solid fa-arrows-rotate"></i></a>
+                <a href="#" class="btn text" id="btn-open-config" title="map channels"><i class="fa-solid fa-sliders"></i></a>
+                <!-- <a href="#" class="btn text" id="btn-get-config">get config</a> -->
+                <!-- <a href="#" class="btn text" id="btn-connect-pipe">connect pipe</a> -->
+                <a href="#" class="btn text" id="btn-settings" title="settings"><i class="fa-solid fa-gear"></i></a>
+            </span>
             
         </div>
 
-        <div class="container dialog shown" id="config-dialog">
+        <div class="container dialog " id="config-dialog">
             <div class="dialog-header">
-                <a href="#" class="text dialog-close-icon" id="btn-dialog-close">X</a>
+                <a href="#" class="text dialog-close-icon" id="btn-config-dialog-close"><i class="fa-solid fa-xmark"></i></a>
             </div>
-
             <div class="container dialog-inner">
                 <ul class="dialog-session-list text">
                     <!-- <li class="session-item"><span class="session-name">Discord.exe</span>
@@ -32,15 +39,53 @@
                             <a href="#" class="addbtn text">6</a>
                         </span>
                     </li> -->
-                    
                 </ul>
-
                 <div class="container dialog-btn-bar">
-                    <a href="#" class="btn text" id="btn-save-config">save</a>
-                    <a href="#" class="btn text" id="btn-cancel-config">cancel</a>
+                    <span>
+                        <input class="input-add-session text" id="input-add-session" type="text" placeholder="add session...">
+                        <a href="#" class="btn text" id="btn-add-session"><i class="fa-solid fa-plus"></i></a>
+                    </span>
+                    <span>
+                        <a href="#" class="btn btn-save text" id="btn-save-config">save</a>
+                        <a href="#" class="btn btn-cancel text" id="btn-cancel-config">cancel</a>
+                    </span>
                 </div>
             </div>
+        </div>
 
+        <div class="container dialog shown" id="settings-dialog">
+            <div class="dialog-header">
+                <a href="#" class="text dialog-close-icon" id="btn-settings-dialog-close"><i class="fa-solid fa-xmark"></i></a>
+            </div>
+            <div class="container dialog-inner">
+                <ul class="dialog-settings-list text">
+                    <li class="setting-item" id="setting-comport"><span class="setting-name">port</span>
+                        <select class="setting-select">
+                            <!-- <option value="COM1">COM1</option>
+                            <option value="COM2">COM2</option>
+                            <option value="COM3">COM3</option> -->
+                        </select>
+                    </li>
+                    <li class="setting-item" id="setting-baudrate"><span class="setting-name">baud rate</span>
+                        <input type="number" class="setting-numinput text">
+                    </li>
+                    <li class="setting-item" id="setting-comparity"><span class="setting-name">com parity</span>
+                        <select class="setting-select">
+                            <option value="EVEN">EVEN</option>
+                            <option value="ODD">ODD</option>
+                            <option value="NONE">NONE</option>
+                        </select>
+                    </li>
+                </ul>
+                <div class="container dialog-btn-bar">
+                    <span>
+                    </span>
+                    <span>
+                        <a href="#" class="btn btn-save text" id="btn-save-settings">save</a>
+                        <a href="#" class="btn btn-cancel text" id="btn-cancel-settings">cancel</a>
+                    </span>
+                </div>
+            </div>
         </div>
 
         <div class="container channel-display">
@@ -51,9 +96,9 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">Speaker (Realtek High Definition Audio)</li>
+                    <!-- <li class="app-item">Speaker (Realtek High Definition Audio)</li>
                     <li class="app-item">spotify.exe</li>
-                    
+                     -->
                 </ul>
             </div>
 
@@ -63,8 +108,6 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">master</li>
-                    <li class="app-item">spotify.exe</li>
                     
                 </ul>
             </div>
@@ -75,8 +118,6 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">master</li>
-                    <li class="app-item">spotify.exe</li>
                     
                 </ul>
             </div>
@@ -87,8 +128,6 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">master</li>
-                    <li class="app-item">spotify.exe</li>
                     
                 </ul>
             </div>
@@ -99,8 +138,6 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">master</li>
-                    <li class="app-item">spotify.exe</li>
                     
                 </ul>
             </div>
@@ -111,8 +148,6 @@
                     <span class="divider-in"></span>
                 </p>
                 <ul class="app-list text">
-                    <li class="app-item">master</li>
-                    <li class="app-item">spotify.exe</li>
                     
                 </ul>
             </div>
