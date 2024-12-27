@@ -7,6 +7,8 @@
 #include <Psapi.h>
 #include <atlbase.h>
 #include <mmdeviceapi.h>
+#include "structs.h"
+#include "json/json.hpp"
 
 class Utils {
 
@@ -22,6 +24,12 @@ public:
 	static int parseCmd1Val(std::string& data, int& ch);
 	static std::vector<int> parseCmdAllVals(std::string& data);
 
+	static void parseConfigFromJSON(nlohmann::json& doc, Config& config);
+	static nlohmann::json storeConfigToJSON(Config& config);
+	static nlohmann::json readConfig(std::string file);
+	static void writeConfig(nlohmann::json& doc, std::string file);
+
+	static void makeConsole();
 private:
 	static std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_conv;
 };

@@ -4,8 +4,8 @@
 #include <queue>
 #include <mutex>
 
-#include "structs.h"
 #include "globals.h"
+#include "structs.h"
 
 class IO {
 	
@@ -15,6 +15,7 @@ public:
 
 	bool initSerialPort();
 	void closeSerialPort();
+	bool isSerialConnected();
 	void cleanup();
 
 	bool hasMessages();

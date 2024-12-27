@@ -1,15 +1,19 @@
+#include "globals.h"
 #include "utils.h"
+#include "structs.h"
 #include <iostream>
 #include <string>
 #include <codecvt>
 #include <locale>
 #include <sstream>
+#include <fstream>
 
 #include <Windows.h>
 #include <Psapi.h>
 #include <Shlwapi.h>
 #include <atlbase.h>
 #include <mmdeviceapi.h>
+#include "json/json.hpp"
 
 using namespace std;
 
@@ -121,4 +125,113 @@ vector<int> Utils::parseCmdAllVals(string& data) {
 		prev = pos;
 	}
 	return result;
+}
+
+void Utils::parseConfigFromJSON(nlohmann::json& doc, Config& config) {
+	DBG_PRINT("Parsing config..." << endl);
+	if (doc.contains("port")) {
+		string s = doc["port"];
+		config.portName = Utils::strToWstr(s);
+	}
+
+	if (doc.contains("baud"))
+		config.baudRate = doc["baud"];
+
+	if (doc.contains("parity")) {
+		string parity = doc["parity"];
+		if (parity == "EVEN")
+			config.parity = EVENPARITY;
+		else if (parity == "ODD")
+			config.parity = ODDPARITY;
+		else
+			config.parity = NOPARITY;
+	}
+
+	if (doc.contains("channels")) {
+		config.channels.clear();
+		for (int i = 0; i < 6; i++)
+			config.channels.push_back(vector<wstring>());
+
+		nlohmann::json& cfgChannels = doc["channels"];
+		for (auto ch : cfgChannels) {
+			int id = ch["id"];
+			if (id >= 0 && id <= 5) {
+				for (string strSession : ch["sessions"]) {
+					config.channels[id].push_back(Utils::strToWstr(strSession));
+				}
+
+			}
+		}
+	}
+}
+
+nlohmann::json Utils::storeConfigToJSON(Config& config) {
+	nlohmann::json doc;
+	doc["port"] = Utils::wStrToStr(config.portName);
+	doc["baud"] = (int)config.baudRate;
+	if (config.parity == EVENPARITY)
+		doc["parity"] = "EVEN";
+	else if (config.parity == ODDPARITY)
+		doc["parity"] = "ODD";
+	else
+		doc["parity"] = "NONE";
+
+	nlohmann::json channels = nlohmann::json::array();
+	for (int i = 0; i < config.channels.size(); i++) {
+		vector<wstring>& vecChannel = config.channels[i];
+		nlohmann::json channel;
+		channel["id"] = i;
+		channel["sessions"] = nlohmann::json::array();
+		for (wstring& wstrSessionName : vecChannel)
+			channel["sessions"].push_back(Utils::wStrToStr(wstrSessionName));
+
+		channels.push_back(channel);
+	}
+	doc["channels"] = channels;
+	return doc;
+}
+
+nlohmann::json Utils::readConfig(std::string file) {
+	DBG_PRINT("Reading config file..." << endl);
+	std::ifstream f(file);
+	nlohmann::json doc;
+	try {
+		doc = nlohmann::json::parse(f);
+	}
+	catch (const nlohmann::json::parse_error& e) {
+		DBG_PRINT("JSON parse error: " << e.what() << endl);
+	}
+	return doc;
+}
+
+void Utils::writeConfig(nlohmann::json& doc, std::string file) {
+	DBG_PRINT("Saving config to file..." << endl);
+	std::ofstream out(file);
+	out << doc.dump(2) << endl;
+	out.close();
+}
+
+void Utils::makeConsole() {
+	AllocConsole();
+
+	// std::cout, std::clog, std::cerr, std::cin
+	FILE* fDummy;
+	freopen_s(&fDummy, "CONOUT$", "w", stdout);
+	freopen_s(&fDummy, "CONOUT$", "w", stderr);
+	freopen_s(&fDummy, "CONIN$", "r", stdin);
+	std::cout.clear();
+	std::clog.clear();
+	std::cerr.clear();
+	std::cin.clear();
+
+	// std::wcout, std::wclog, std::wcerr, std::wcin
+	HANDLE hConOut = CreateFile(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE hConIn = CreateFile(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	SetStdHandle(STD_OUTPUT_HANDLE, hConOut);
+	SetStdHandle(STD_ERROR_HANDLE, hConOut);
+	SetStdHandle(STD_INPUT_HANDLE, hConIn);
+	std::wcout.clear();
+	std::wclog.clear();
+	std::wcerr.clear();
+	std::wcin.clear();
 }

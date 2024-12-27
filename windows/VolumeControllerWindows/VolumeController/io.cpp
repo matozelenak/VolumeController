@@ -1,6 +1,6 @@
+#include "globals.h"
 #include "io.h"
 #include "utils.h"
-#include "globals.h"
 #include <string>
 #include <iostream>
 
@@ -42,7 +42,7 @@ IO::~IO() {
 bool IO::initSerialPort() {
 	if (serialConnected) return false;
 	while (!messages.empty()) messages.pop();
-	wcout << L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl;
+	DBG_PRINTW(L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl);
 	wstring portPath = L"\\\\.\\";
 	portPath += config->portName;
 	hSerialPort = CreateFile(portPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -64,7 +64,11 @@ void IO::closeSerialPort() {
 	if (!serialConnected) return;
 	CloseHandle(hSerialPort);
 	serialConnected = false;
-	cout << "closing serial port";
+	DBG_PRINT("closing serial port" << endl);
+}
+
+bool IO::isSerialConnected() {
+	return serialConnected;
 }
 
 void IO::cleanup() {
