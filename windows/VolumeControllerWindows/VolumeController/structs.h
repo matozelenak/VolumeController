@@ -12,5 +12,4 @@ struct Config {
 	DWORD baudRate = 115200;
 	BYTE parity = EVENPARITY;
 	std::vector<std::vector<std::wstring>> channels;
-	//nlohmann::json doc;
 };

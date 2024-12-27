@@ -361,6 +361,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	Shell_NotifyIcon(NIM_DELETE, &nid);
 	delete io;
 	delete controller;
+	CoUninitialize();
     return 0;
 }
 

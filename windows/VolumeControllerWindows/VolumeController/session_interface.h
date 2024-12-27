@@ -78,7 +78,6 @@ public:
 
 private:
 	DWORD _pid;
-	//bool _isSystemSoundsSession;
 	CComPtr<IAudioSessionControl> _sessionControl;
 	CComPtr<ISimpleAudioVolume> _simpleVolume;
 	Controller* _controller;

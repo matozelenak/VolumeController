@@ -43,13 +43,9 @@ private:
 	std::vector<PAudioSession> _sessionPool;
 	std::vector<PAudioDevice> _devicePool;
 
-	//AudioDevice& _masterOut;
-
 	CComPtr<IMMDeviceEnumerator> _deviceEnumerator;
 	CComPtr<IMMDeviceCollection> _outputDevices;
 
 	Controller* controller;
-
-	//SessionCreatedNotification* sessionNotification;
 
 };
