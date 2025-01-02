@@ -33,36 +33,43 @@ const channelBlocks = [
 
 const dialogSessionList = document.getElementsByClassName('dialog-session-list')[0];
 let reconnectIntervalID;
-let sessionPool = [];
-let sessionPoolCopy = [];
+let sessionPool = undefined;
+let sessionPoolCopy = undefined;
+let settings = undefined;
 let pipeConnected = false;
-let jsonPipeData = '';
 
-
-// status bar buttons
+////////////////////////////////////////////////////
+//////////////// status bar buttons ////////////////
+////////////////////////////////////////////////////
 btnRefresh.addEventListener('click', () => {
     window.versions.requestConfig();
 })
 
 btnOpenConfig.addEventListener('click', () => {
+    if (settingsDialog.classList.contains('shown')) return;
     configDialog.classList.add('shown');
 });
 
 btnSettings.addEventListener('click', () => {
+    if (configDialog.classList.contains('shown')) return;
     settingsDialog.classList.add('shown');
 });
 
-// config dialog buttons
+////////////////////////////////////////////////////
+/////////////// config dialog buttons //////////////
+////////////////////////////////////////////////////
 btnCloseConfig.addEventListener('click', () => {
     configDialog.classList.remove('shown');
+    if (!sessionPool) return;
+    sessionPoolCopy = JSON.parse(JSON.stringify(sessionPool));
+    makeSessionList(sessionPool);  // discard changes when closing dialog
 });
 
 btnSaveConfig.addEventListener('click', () => {
-    if (jsonPipeData === '') return;
+    if (!sessionPool) return;
     let data = {};
     data.configFile = {};
 
-    makeSettings(data.configFile, jsonPipeData.configFile);
     makeConfig(data.configFile, sessionPoolCopy);
     sessionPool = JSON.parse(JSON.stringify(sessionPoolCopy));
     window.versions.saveConfig(JSON.stringify(data));
@@ -71,12 +78,14 @@ btnSaveConfig.addEventListener('click', () => {
 });
 
 btnCancelConfig.addEventListener('click', () => {
-    sessionPoolCopy = JSON.parse(JSON.stringify(sessionPool));
-    makeSessionList(sessionPool);
     configDialog.classList.remove("shown");
+    if (!sessionPool) return;
+    sessionPoolCopy = JSON.parse(JSON.stringify(sessionPool));
+    makeSessionList(sessionPool);  // discard changes when closing dialog
 });
 
 btnAddSession.addEventListener('click', () => {
+    if (!sessionPool) return;
     const sessionName = inputAddSession.value;
     if (sessionName === '') return;
     inputAddSession.value = '';
@@ -84,39 +93,123 @@ btnAddSession.addEventListener('click', () => {
     addSessionItem(sessionName, -1);
 });
 
-// settings dialog buttons
+////////////////////////////////////////////////////
+///////////// settings dialog buttons //////////////
+////////////////////////////////////////////////////
 btnCloseSettings.addEventListener('click', () => {
     settingsDialog.classList.remove('shown');
+    if (!settings) return;
+    loadSettings(); // discard changes when closing dialog
 });
 
 btnSaveSettings.addEventListener('click', () => {
-    if (jsonPipeData === '') return;
+    if (!settings) return;
     let data = {};
     data.configFile = {};
-    jsonPipeData.configFile.port = settingPortName.selectedOptions[0].value;
-    jsonPipeData.configFile.baud = parseInt(settingBaudRate.value);
-    jsonPipeData.configFile.parity = settingComParity.selectedOptions[0].value;
+    data.configFile.port = settingPortName.selectedOptions[0].value;
+    data.configFile.baud = parseInt(settingBaudRate.value);
+    data.configFile.parity = settingComParity.selectedOptions[0].value;
     
-    makeSettings(data.configFile, jsonPipeData.configFile);
-    makeConfig(data.configFile, sessionPool);
     window.versions.saveConfig(JSON.stringify(data));
     settingsDialog.classList.remove("shown");
 });
 
 btnCancelSettings.addEventListener('click', () => {
     settingsDialog.classList.remove("shown");
+    if (!settings) return;
+    loadSettings(); // discard changes when closing dialog
 });
 
+////////////////////////////////////////////////////
+/////////////// ipc functions //////////////////////
+////////////////////////////////////////////////////
 window.onload = () => {
     reconnectIntervalID = setInterval(tryReconnectPipe, 1000);
 };
 
-function makeSettings(jsonData, settingsData) {
-    jsonData.port = settingsData.port;
-    jsonData.baud = settingsData.baud;
-    jsonData.parity = settingsData.parity;
-}
+window.versions.onPipeData((pipeData) => {
+    let jsonPipeData = {};
+    try {
+        jsonPipeData = JSON.parse(pipeData);
+    } catch (error) {
+        console.log("Failed to parse JSON: ", error.message);
+    }
 
+    if (jsonPipeData.status) {
+        const status = jsonPipeData.status;
+        const deviceConnected = status.deviceConnected;
+        updateDeviceStatus(deviceConnected);
+        if (status.comPorts) {
+            settingPortName.children = [];
+            for (port of status.comPorts) {
+                settingsOptionAdd(settingPortName, port);
+            }
+            if (settings) {
+                settingsOptionAdd(settingPortName, settings.port);
+                settingOptionSelect(settingPortName, settings.port);
+            }
+        }
+    }
+
+    if (jsonPipeData.configFile || jsonPipeData.sessionPool || jsonPipeData.devicePool) {
+        sessionPool = [];
+        sessionPoolCopy = [];
+        addToSessionPool(sessionPool, 'default output device', -1, false);
+        addToSessionPool(sessionPool, 'system sounds', -1, false);
+        addToSessionPool(sessionPool, 'other applications', -1, false);
+    }
+
+    if (jsonPipeData.configFile) {
+        const configFile = jsonPipeData.configFile;
+        
+        settings = [];
+        settings.port = configFile.port;
+        settings.baud = configFile.baud;
+        settings.parity = configFile.parity;
+        loadSettings();
+        
+        for (channel of configFile.channels) {
+            for (sessionName of channel.sessions) {
+                const newName = sessionNameFromInternal(sessionName);
+                addToSessionPool(sessionPool, newName, channel.id, true);
+            }
+        }
+    }
+    if (jsonPipeData.sessionPool) {
+        for (sessionName of jsonPipeData.sessionPool) {
+            const newName = sessionNameFromInternal(sessionName);
+            addToSessionPool(sessionPool, newName, -1, false);
+        }
+    }
+    if (jsonPipeData.devicePool) {
+        for (deviceName of jsonPipeData.devicePool) {
+            addToSessionPool(sessionPool, deviceName, -1, false);
+        }
+    }
+
+    if (jsonPipeData.configFile || jsonPipeData.sessionPool || jsonPipeData.devicePool) {
+        sessionPoolCopy = JSON.parse(JSON.stringify(sessionPool));
+        makeSessionList(sessionPool);
+        makeChannelBlocks();
+    }
+});
+
+window.versions.onPipeStatus((pipeStatus) => {
+    updatePipeStatus(pipeStatus);
+    if (pipeStatus) {
+        clearInterval(reconnectIntervalID);
+        reconnectIntervalID = 0;
+        window.versions.requestConfig();
+    }
+    else {
+        if (reconnectIntervalID == 0)
+            reconnectIntervalID = setInterval(tryReconnectPipe, 1000);
+    }
+});
+
+////////////////////////////////////////////////////
+/////////// settings & config functions ////////////
+////////////////////////////////////////////////////
 function makeConfig(jsonData, sessionData) {
     jsonData.channels = [];
     for (let i = 0; i <= 5; i++)
@@ -124,8 +217,17 @@ function makeConfig(jsonData, sessionData) {
 
     for (session of sessionData) {
         if (session.assignedChannel == -1) continue;
-        jsonData.channels[session.assignedChannel].sessions.push(session.name);
+        const channelSessions = jsonData.channels[session.assignedChannel].sessions;
+        channelSessions.push(sessionNameToInternal(session.name));
     }
+}
+
+function loadSettings() {
+    if (!settings) return;
+    settingsOptionAdd(settingPortName, settings.port);
+    settingOptionSelect(settingPortName, settings.port);
+    settingBaudRate.value = settings.baud;
+    settingOptionSelect(settingComParity, settings.parity);
 }
 
 function settingsOptionAdd(select, optionName) {
@@ -149,85 +251,19 @@ function settingOptionSelect(select, optionName) {
     }
 }
 
-
-window.versions.onPipeData((pipeData) => {
-    try {
-        jsonPipeData = JSON.parse(pipeData);
-        
-        if (jsonPipeData.status) {
-            const status = jsonPipeData.status;
-            const deviceConnected = status.deviceConnected;
-            updateDeviceStatus(deviceConnected);
-            if (status.comPorts) {
-                settingPortName.children = [];
-                for (port of status.comPorts) {
-                    settingsOptionAdd(settingPortName, port);
-                }
-            }
-        }
-
-        if (jsonPipeData.configFile || jsonPipeData.sessionPool || jsonPipeData.devicePool) {
-            sessionPool = [];
-        }
-
-        if (jsonPipeData.configFile) {
-            const configFile = jsonPipeData.configFile;
-            
-            
-            settingsOptionAdd(settingPortName, configFile.port);
-            settingOptionSelect(settingPortName, configFile.port);
-            settingBaudRate.value = configFile.baud;
-            settingOptionSelect(settingComParity, configFile.parity);
-
-            for (channel of configFile.channels) {
-                for (sessionName of channel.sessions) {
-                    if (sessionPool.some(e => {return e.name === sessionName;})) continue;
-                    // if (devicePool.some(e => {e.name === sessionName})) continue;
-                    sessionPool.push({name: sessionName, assignedChannel: channel.id});
-                }
-            }
-        }
-        if (jsonPipeData.sessionPool) {
-            for (sessionName of jsonPipeData.sessionPool) {
-                if (sessionPool.some(e => {return e.name === sessionName;})) continue;
-                sessionPool.push({name: sessionName, assignedChannel: -1});
-            }
-        }
-        if (jsonPipeData.devicePool) {
-            for (deviceName of jsonPipeData.devicePool) {
-                if (sessionPool.some(e => {return e.name === sessionName;})) continue;
-                // if (devicePool.some(e => {e.name === deviceName})) continue;
-                sessionPool.push({name: deviceName, assignedChannel: -1});
-            }
-        }
-
-        // make list
-        if (jsonPipeData.configFile || jsonPipeData.sessionPool || jsonPipeData.devicePool) {
-            sessionPoolCopy = JSON.parse(JSON.stringify(sessionPool));
-            makeSessionList(sessionPool);
-        }
-
-        // make channel blocks
-        makeChannelBlocks();
-
-    } catch (error) {
-        console.log("Failed to parse JSON: ", error.message);
-    }
-});
-
-window.versions.onPipeStatus((pipeStatus) => {
-    updatePipeStatus(pipeStatus);
-    if (pipeStatus) {
-        clearInterval(reconnectIntervalID);
-        reconnectIntervalID = 0;
-        window.versions.requestConfig();
+function addToSessionPool(sessionPool, sessionName, ch, bChange) {
+    if (sessionPool.some(e => {return e.name === sessionName;})) {
+        if (!bChange) return;
+        sessionPool.find(e => {return e.name === sessionName;}).assignedChannel = ch;
+        // console.log(sessionName + ' changed to ' + ch);
     }
     else {
-        if (reconnectIntervalID == 0)
-            reconnectIntervalID = setInterval(tryReconnectPipe, 1000);
+        sessionPool.push({name: sessionName, assignedChannel: ch});
+        // console.log(sessionName + ' added to ' + ch);
     }
-});
+}
 
+//////////////////////////////////////////////////////////////
 function tryReconnectPipe() {
     window.versions.connectPipe();
 }
@@ -247,8 +283,8 @@ function updateDeviceStatus(status) {
 
 function makeSessionList(list) {
     dialogSessionList.innerHTML = "";
-    for (sessionObj of list) {
-        addSessionItem(sessionObj.name, sessionObj.assignedChannel);
+    for (session of list) {
+        addSessionItem(session.name, session.assignedChannel);
     }
 }
 
@@ -312,12 +348,38 @@ function makeChannelBlocks() {
         block.innerHTML = '';
     }
     for (session of sessionPool) {
+        const ch = session.assignedChannel;
+        if (ch == -1) continue;
+
         const li = document.createElement('li');
         li.classList.add('app-item');
-        li.innerText = session.name;
-        
-        const ch = session.assignedChannel;
+        li.innerText = sessionNameFromInternal(session.name);
+
         channelBlocks[ch].appendChild(li);
     }
+}
+
+function sessionNameFromInternal(name) {
+    switch (name) {
+        case 'master':
+            return 'default output device';
+        case 'system':
+            return 'system sounds';
+        case 'other':
+            return 'other applications';
+    }
+    return name;
+}
+
+function sessionNameToInternal(name) {
+    switch (session.name) {
+        case 'default output device':
+            return 'master';
+        case 'system sounds':
+            return 'system';
+        case 'other applications':
+            return 'other';
+    }
+    return name;
 }
 

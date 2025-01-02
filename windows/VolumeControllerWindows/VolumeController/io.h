@@ -15,16 +15,19 @@ public:
 
 	bool initSerialPort();
 	void closeSerialPort();
-	bool isSerialConnected();
 	void cleanup();
 
 	bool hasMessages();
 	std::string popMessage();
 	void send(std::string data);
+	bool isSerialConnected();
 
 	bool hasPipeMessages();
 	std::string popPipeMessage();
 	void sendPipe(std::string data);
+	bool isPipeConnected();
+
+	void configChanged();
 
 private:
 	bool setCommParameters();
@@ -52,6 +55,9 @@ private:
 	std::mutex qPipeMutex;
 	std::queue<std::string> pipeMessages;
 
+	std::wstring portName;
+	BYTE comParity;
+	DWORD baudRate;
 
 	LPCWSTR PIPE_PATH = L"\\\\.\\pipe\\" PIPE_NAME;
 };

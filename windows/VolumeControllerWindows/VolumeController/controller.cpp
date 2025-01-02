@@ -47,6 +47,7 @@ void Controller::mapChannels() {
 
 	// map volumes
 	vector<bool> chVolUsed(sessionPool->size());
+	chVolOther = -1;
 	// iterate channels
 	for (int i = 0; i < config->channels.size(); i++) {
 		// iterate applications for that channel
@@ -170,23 +171,6 @@ string Controller::makeMuteCmd() {
 	vector<int> chMute(6);
 	for (Channel& channel : channels) {
 		chMute[channel.getID()] = channel.isMuted();
-	//	for (wstring session : channel.sessions) {
-	//		if (session == L"master") {
-	//			chMute[channel.id] = mgr->getOutputDeviceMute();
-	//			break;
-	//		}
-	//		else {
-	//			for (AudioSession& aSession : sessions) {
-	//				if (aSession.filename == session) {
-	//					chMute[channel.id] = mgr->getSessionMute(session);
-	//					goto end_iterateChannelSessions;
-	//				}
-	//			}
-	//		}
-	//	}
-
-	//end_iterateChannelSessions:
-	//	;
 	}
 
 	return Utils::makeCmdAllVals('M', chMute);
@@ -196,23 +180,6 @@ string Controller::makeActiveDataCmd() {
 	vector<int> chActive(6);
 	for (Channel& channel : channels) {
 		chActive[channel.getID()] = channel.isActive();
-		//for (wstring session : channel.sessions) {
-		//	if (session == L"master") {
-		//		chActive[channel.id] = true;
-		//		break;
-		//	}
-		//	else {
-		//		for (AudioSession& aSession : sessions) {
-		//			if (aSession.filename == session) {
-		//				chActive[channel.id] = true;
-		//				goto end_iterateChannelSessions;
-		//			}
-		//		}
-		//	}
-		//}
-
-	//end_iterateChannelSessions:
-	//	;
 	}
 
 	return Utils::makeCmdAllVals('A', chActive);

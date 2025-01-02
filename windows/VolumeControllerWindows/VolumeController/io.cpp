@@ -42,9 +42,13 @@ IO::~IO() {
 bool IO::initSerialPort() {
 	if (serialConnected) return false;
 	while (!messages.empty()) messages.pop();
-	DBG_PRINTW(L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl);
+	this->portName = config->portName;
+	this->baudRate = config->baudRate;
+	this->comParity = config->parity;
+
+	DBG_PRINTW(L"opening serial port " << portName << L", baud: " << baudRate << endl);
 	wstring portPath = L"\\\\.\\";
-	portPath += config->portName;
+	portPath += portName;
 	hSerialPort = CreateFile(portPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (hSerialPort == INVALID_HANDLE_VALUE) {
 		Utils::printLastError(L"CreateFile");
@@ -52,6 +56,7 @@ bool IO::initSerialPort() {
 	}
 
 	if (!setCommParameters()) {
+		closeSerialPort();
 		return false;
 	}
 
@@ -64,7 +69,8 @@ void IO::closeSerialPort() {
 	if (!serialConnected) return;
 	CloseHandle(hSerialPort);
 	serialConnected = false;
-	DBG_PRINT("closing serial port" << endl);
+	DBG_PRINTW(L"closing serial port " << portName << endl);
+	PostMessage(hWnd, MSG_SERIALDISCONNECTED, 0, 0);
 }
 
 bool IO::isSerialConnected() {
@@ -428,4 +434,15 @@ void IO::sendPipe(string data) {
 
 	CloseHandle(olWrite.hEvent);
 
+}
+
+bool IO::isPipeConnected() {
+	return pipeConnected;
+}
+
+void IO::configChanged() {
+	if (config->portName != portName || config->baudRate != baudRate || config->parity != comParity) {
+		closeSerialPort();
+		initSerialPort();
+	}
 }

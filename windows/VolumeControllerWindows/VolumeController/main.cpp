@@ -33,6 +33,24 @@ HWND hWnd = NULL;
 HMENU hTrayMenu = NULL;
 HDEVNOTIFY hDeviceNotify = NULL;
 
+void makeStatusJSON(json& doc) {
+	doc["status"] = json();
+	doc["status"]["deviceConnected"] = io->isSerialConnected();
+	ULONG ports[20];
+	ULONG count = 20;
+	ULONG found;
+	GetCommPorts(ports, count, &found);
+	doc["status"]["comPorts"] = json::array();
+	DBG_PRINT("found " << found << " com ports" << endl);
+	for (int i = 0; i < found && i < count; i++) {
+		stringstream portName;
+		portName << "COM";
+		portName << (int)ports[i];
+		doc["status"]["comPorts"].push_back(portName.str());
+		DBG_PRINT("  found " << portName.str() << endl);
+	}
+}
+
 void parsePipeMessage(string msg) {
 	json doc;
 	try {
@@ -47,22 +65,7 @@ void parsePipeMessage(string msg) {
 		json requests = doc["request"];
 		for (string type : requests) {
 			if (type == "status") {
-				response["status"] = json();
-				response["status"]["deviceConnected"] = io->isSerialConnected();
-				ULONG ports[20];
-				ULONG count = 20;
-				ULONG found;
-				GetCommPorts(ports, count, &found);
-				response["status"]["comPorts"] = json::array();
-				DBG_PRINT("found " << found << " com ports" << endl);
-				for (int i = 0; i < found && i < count; i++) {
-					stringstream portName;
-					portName << "COM";
-					portName << (int)ports[i];
-					response["status"]["comPorts"].push_back(portName.str());
-					DBG_PRINT("  found " << portName.str() << endl);
-				}
-
+				makeStatusJSON(response);
 			}
 			else if (type == "config") {
 				response["configFile"] = Utils::storeConfigToJSON(config);
@@ -92,6 +95,10 @@ void parsePipeMessage(string msg) {
 		Utils::parseConfigFromJSON(cfg, config);
 		json doc = Utils::storeConfigToJSON(config);
 		Utils::writeConfig(doc, CONFIG_FILE);
+
+		io->configChanged();
+		controller->rescanAndRemap();
+		controller->update();
 	}
 }
 
@@ -252,6 +259,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		}
 		break;
 	case MSG_CONNECTSUCCESS:
+		if (io->isPipeConnected()) {
+			json doc;
+			makeStatusJSON(doc);
+			io->sendPipe(doc.dump());
+		}
+		break;
+	case MSG_SERIALDISCONNECTED:
+		if (io->isPipeConnected()) {
+			json doc;
+			makeStatusJSON(doc);
+			io->sendPipe(doc.dump());
+		}
 		break;
 	case MSG_SESSION_DESTROYED:
 		controller->sessionDestroyed();
