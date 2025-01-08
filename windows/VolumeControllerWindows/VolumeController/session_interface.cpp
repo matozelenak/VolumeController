@@ -121,7 +121,7 @@ AudioSession::AudioSession(CComPtr<IAudioSessionControl> sessionControl, Control
 }
 
 AudioSession::~AudioSession() {
-	DBG_PRINTW(L" - ~AudioSession() " << _name << endl);
+	DBG_PRINTW(L"  - ~AudioSession() " << _name << endl);
 	_sessionControl->UnregisterAudioSessionNotification(_sessionEvents);
 	delete _sessionEvents;
 	_sessionEvents = nullptr;

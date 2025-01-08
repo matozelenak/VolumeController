@@ -14,8 +14,7 @@ public:
 	~IO();
 
 	bool initSerialPort();
-	void closeSerialPort();
-	void cleanup();
+	void disconnectSerialPort();
 
 	bool hasMessages();
 	std::string popMessage();
@@ -30,6 +29,8 @@ public:
 	void configChanged();
 
 private:
+	void cleanup();
+	void closeSerialPort();
 	bool setCommParameters();
 	static DWORD WINAPI threadRoutineStatic(LPVOID lpParam);
 	static DWORD WINAPI threadPipeRoutineStatic(LPVOID lpParam);
@@ -48,6 +49,7 @@ private:
 	HANDLE hThreadPipe;
 	bool stopThread;
 	bool stopThreadPipe;
+	bool stopSerialRead;
 
 	HWND hWnd;
 	std::mutex qMutex;

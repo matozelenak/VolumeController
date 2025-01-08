@@ -1,6 +1,8 @@
 #include "globals.h"
 #include "utils.h"
 #include "structs.h"
+#include "controller.h"
+#include "volume_manager.h"
 #include <iostream>
 #include <string>
 #include <codecvt>
@@ -88,6 +90,24 @@ string Utils::wStrToStr(wstring& wstr) {
 	return utf8_conv.to_bytes(wstr);
 }
 
+wstring Utils::getCurrentDir() {
+	WCHAR buffer[MAX_PATH];
+	DWORD length = GetModuleFileNameW(NULL, buffer, MAX_PATH);
+	if (length == 0) {
+		Utils::printLastError(L"GetModuleFileNameW");
+		return L"";
+	}
+	if (FAILED(PathRemoveFileSpecW(buffer))) {
+		return L"";
+	}
+	return buffer;
+}
+
+wstring Utils::joinPathWithFileName(wstring path, wstring filename) {
+	path += L"\\";
+	path += filename;
+	return path;
+}
 
 string Utils::makeCmd1Val(char cmd, int ch, int val) {
 	stringstream ss;
@@ -191,9 +211,9 @@ nlohmann::json Utils::storeConfigToJSON(Config& config) {
 	return doc;
 }
 
-nlohmann::json Utils::readConfig(std::string file) {
+nlohmann::json Utils::readConfig(string file) {
 	DBG_PRINT("Reading config file..." << endl);
-	std::ifstream f(file);
+	ifstream f(Utils::joinPathWithFileName(Utils::getCurrentDir(), Utils::strToWstr(file)));
 	nlohmann::json doc;
 	try {
 		doc = nlohmann::json::parse(f);
@@ -204,9 +224,9 @@ nlohmann::json Utils::readConfig(std::string file) {
 	return doc;
 }
 
-void Utils::writeConfig(nlohmann::json& doc, std::string file) {
+void Utils::writeConfig(nlohmann::json& doc, string file) {
 	DBG_PRINT("Saving config to file..." << endl);
-	std::ofstream out(file);
+	ofstream out(Utils::joinPathWithFileName(Utils::getCurrentDir(), Utils::strToWstr(file)));
 	out << doc.dump(2) << endl;
 	out.close();
 }
@@ -234,4 +254,36 @@ void Utils::makeConsole() {
 	std::wclog.clear();
 	std::wcerr.clear();
 	std::wcin.clear();
+}
+
+void Utils::openGUI() {
+	ShellExecuteW(NULL, NULL, Utils::joinPathWithFileName(Utils::getCurrentDir(),
+		GUI_EXE_PATH).c_str(), NULL, NULL, SW_SHOW);
+}
+
+wstring Utils::makeDebugInfo(VolumeManager* vol, Controller* controller) {
+	wstringstream messageBoxContent;
+	messageBoxContent << L"==========devicePool===========" << endl;
+	vector<PAudioDevice>& devicePool = vol->getDevicePool();
+	for (PAudioDevice& device : devicePool) {
+		messageBoxContent << L"  - " << device->getName() << endl;
+	}
+	messageBoxContent << L"==========sessionPool===========" << endl;
+	vector<PAudioSession>& sessionPool = vol->getSessionPool();
+	for (PAudioSession& session : sessionPool) {
+		messageBoxContent << L"  - " << session->getName() << L" [" << session->getPID() << L"]" << endl;
+	}
+	messageBoxContent << L"==========channels============" << endl;
+	vector<Channel>& channels = controller->getChannels();
+	int i = 1;
+	for (Channel& channel : channels) {
+		messageBoxContent << L" " << i << L"." << endl;
+		i++;
+		vector<PISession>& sessions = channel.getSessions();
+		for (PISession& session : sessions) {
+			messageBoxContent << L"  - " << session->getName() << endl;
+		}
+	}
+	messageBoxContent << "==========================" << endl;
+	return messageBoxContent.str();
 }

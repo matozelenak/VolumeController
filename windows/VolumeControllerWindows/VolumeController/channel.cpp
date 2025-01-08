@@ -48,6 +48,8 @@ void Channel::removeSession(wstring instanceID) {
 			break;
 		}
 	}
+	if (sessions.empty())
+		active = false;
 }
 
 void Channel::removeDestroyedSessions() {
@@ -59,6 +61,8 @@ void Channel::removeDestroyedSessions() {
 			}
 		}
 	}
+	if (sessions.empty())
+		active = false;
 }
 
 int Channel::getID() {

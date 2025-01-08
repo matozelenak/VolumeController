@@ -93,6 +93,7 @@ void Controller::addSession(PISession session) {
 			if (channel[j] == name) {
 				channels[i].addSession(session);
 				DBG_PRINTW(L"added " << name << " to channel " << i << endl);
+				update();
 				return;
 			}
 		}
@@ -102,6 +103,7 @@ void Controller::addSession(PISession session) {
 	if (chVolOther != -1) {
 		channels[chVolOther].addSession(session);
 		DBG_PRINTW(L"added " << name << " to volOther (" << chVolOther << L")" << endl);
+		update();
 	}
 }
 
@@ -129,8 +131,9 @@ void Controller::sessionDestroyed() {
 			sessionPool->erase(sessionPool->begin() + i);
 			i--;
 		}
-
 	}
+
+	update();
 }
 
 void Controller::defaultDeviceChanged(EDataFlow flow, ERole role) {

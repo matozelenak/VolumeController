@@ -32,6 +32,9 @@ Config config;
 HWND hWnd = NULL;
 HMENU hTrayMenu = NULL;
 HDEVNOTIFY hDeviceNotify = NULL;
+HICON hIconConnected = NULL;
+HICON hIconDisconnected = NULL;
+NOTIFYICONDATA nid;
 
 void makeStatusJSON(json& doc) {
 	doc["status"] = json();
@@ -188,7 +191,7 @@ void registerComDeviceNotification() {
 
 	hDeviceNotify = RegisterDeviceNotification(hWnd, &NotificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
 	if (hDeviceNotify == NULL) {
-		std::cerr << "Failed to register device notification" << std::endl;
+		DBG_PRINT("Failed to register device notification" << endl);
 	}
 }
 
@@ -200,16 +203,17 @@ void unregisterComDeviceNotification() {
 }
 
 void ShowTrayMenu(HWND hWnd) {
-	// Create the tray menu if it doesn't exist
 	if (!hTrayMenu) {
 		hTrayMenu = CreatePopupMenu();
 		AppendMenu(hTrayMenu, MF_STRING, ID_TRAY_OPEN_GUI, L"Open Settings");
 		AppendMenu(hTrayMenu, MF_STRING, ID_TRAY_RECONNECT, L"Reconnect");
 		AppendMenu(hTrayMenu, MF_STRING, ID_TRAY_RESCAN_SESSIONS, L"Rescan Audio Sessions");
 		AppendMenu(hTrayMenu, MF_SEPARATOR, 0, NULL);
+		AppendMenu(hTrayMenu, MF_STRING, ID_TRAY_DEBUGINFO, L"Debug info");
 		AppendMenu(hTrayMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
 	}
 
+	// show the menu
 	POINT pt;
 	GetCursorPos(&pt);
 	SetForegroundWindow(hWnd);
@@ -222,79 +226,83 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		DBG_PRINT("WM_DESTROY" << endl);
 		PostQuitMessage(0);
 		break;
-	case MSG_NOTIFYICON_CLICKED:
-		if (lParam == WM_RBUTTONUP) {
-			ShowTrayMenu(hWnd);
-		}
-		else if (lParam == WM_LBUTTONUP) {
-			// TODO open GUI
-			//MessageBox(hWnd, L"This will open GUI", L"Volume Controller", MB_OK);
-			cout << "=========sessionPool=================" << endl;
-			vector<PAudioSession>& sessionPool = vol->getSessionPool();
-			for (PAudioSession& session : sessionPool) {
-				wcout << L"  - " << session->getName() << endl;
-			}
-			cout << "=========channels=================" << endl;
-			vector<Channel>& channels = controller->getChannels();
-			int i = 1;
-			for (Channel& channel : channels) {
-				cout << " " << i << "." << endl;
-				i++;
-				vector<PISession>& sessions = channel.getSessions();
-				for (PISession& session : sessions) {
-					wcout << L"  - " << session->getName() << endl;
-				}
-			}
-			cout << "==========================" << endl;
-		}
-		break;
-	case MSG_DATAARRIVED:
+
+	case MSG_SERIAL_DATAARRIVED:
+		// data arrived on serial port
 		while (io->hasMessages()) {
 			parseMessage(io->popMessage());
 		}
 		break;
+
+	case MSG_SERIAL_CONNECTED:
+		// COM device was connected successfully
+		if (io->isPipeConnected()) {
+			json doc;
+			makeStatusJSON(doc);
+			io->sendPipe(doc.dump());
+		}
+		nid.hIcon = hIconConnected;
+		Shell_NotifyIcon(NIM_MODIFY, &nid);
+		break;
+
+	case MSG_SERIAL_DISCONNECTED:
+		// COM device was disconnected
+		if (io->isPipeConnected()) {
+			json doc;
+			makeStatusJSON(doc);
+			io->sendPipe(doc.dump());
+		}
+		nid.hIcon = hIconDisconnected;
+		Shell_NotifyIcon(NIM_MODIFY, &nid);
+		break;
+
 	case MSG_PIPE_DATAARRIVED:
+		// pipe data arrived
 		while (io->hasPipeMessages()) {
 			parsePipeMessage(io->popPipeMessage());
 		}
 		break;
-	case MSG_CONNECTSUCCESS:
-		if (io->isPipeConnected()) {
-			json doc;
-			makeStatusJSON(doc);
-			io->sendPipe(doc.dump());
-		}
-		break;
-	case MSG_SERIALDISCONNECTED:
-		if (io->isPipeConnected()) {
-			json doc;
-			makeStatusJSON(doc);
-			io->sendPipe(doc.dump());
-		}
-		break;
+
 	case MSG_SESSION_DESTROYED:
+		// when an audio session was destroyed
 		controller->sessionDestroyed();
 		break;
+
+	case MSG_NOTIFYICON_CLICKED:
+		// when the tray icon was clicked
+		if (lParam == WM_RBUTTONUP) {
+			ShowTrayMenu(hWnd);
+		}
+		else if (lParam == WM_LBUTTONUP) {
+			Utils::openGUI();
+		}
+		break;
+
 	case WM_COMMAND:
+		// when tray menu item is clicked
 		switch (LOWORD(wParam)) {
 		case ID_TRAY_OPEN_GUI:
-			// TODO open GUI
-			//MessageBox(hWnd, L"This will open GUI", L"Volume Controller", MB_OK);
-			ShellExecute(NULL, NULL, L"volumecontroller-gui-win32-x64\\VolumeController GUI.exe", NULL, NULL, SW_SHOW);
+			Utils::openGUI();
 			break;
 		case ID_TRAY_RECONNECT:
+			io->disconnectSerialPort();
 			io->initSerialPort();
 			break;
 		case ID_TRAY_RESCAN_SESSIONS:
 			controller->rescanAndRemap();
 			controller->update();
 			break;
+		case ID_TRAY_DEBUGINFO:
+			MessageBox(NULL, Utils::makeDebugInfo(vol, controller).c_str(), L"Debug Info", MB_OK);
+			break;
 		case ID_TRAY_EXIT:
 			PostQuitMessage(0);
 			break;
 		}
 		break;
+
 	case WM_DEVICECHANGE:
+		// COM device connected or disconnected
 		if (wParam == DBT_DEVICEARRIVAL) {
 			PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lParam;
 			if (pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE) {
@@ -312,6 +320,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			}
 		}
 		break;
+
 	default:
 		return DefWindowProc(hwnd, msg, wParam, lParam);
 	}
@@ -319,6 +328,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+	// check if another instance of this program is running, of yes, exit
 	CreateMutex(NULL, TRUE, UNIQUE_MUTEX_NAME);
 	if (GetLastError() == ERROR_ALREADY_EXISTS) {
 		return 0;
@@ -329,20 +339,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProc,
 					  0, 0, hInstance, NULL, NULL, NULL, NULL,
-					  L"VolumeController_class", NULL };
+					  WND_CLASS, NULL };
 	RegisterClassEx(&wc);
 
-	hWnd = CreateWindowEx(0, L"VolumeController_class", L"VolumeController Window",
+	hWnd = CreateWindowEx(0, WND_CLASS, WND_TITLE,
 		0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
 
+	// TODO temporary tray icons
 	SHSTOCKICONINFO stockIconInfo;
 	stockIconInfo.cbSize = sizeof(stockIconInfo);
 	SHGetStockIconInfo(SIID_DESKTOPPC, SHGSI_ICON, &stockIconInfo);
-	HICON hIconDisconnected = stockIconInfo.hIcon;
+	hIconDisconnected = stockIconInfo.hIcon;
 	SHGetStockIconInfo(SIID_NETWORKCONNECT, SHGSI_ICON, &stockIconInfo);
-	HICON hIconConnected = stockIconInfo.hIcon;
+	hIconConnected = stockIconInfo.hIcon;
 
-	NOTIFYICONDATA nid;
+	// set up tray icon
 	ZeroMemory(&nid, sizeof(NOTIFYICONDATA));
 	nid.cbSize = sizeof(NOTIFYICONDATA);
 	nid.hWnd = hWnd;
@@ -350,7 +361,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 	nid.uCallbackMessage = MSG_NOTIFYICON_CLICKED;
 	nid.hIcon = hIconDisconnected;
-	lstrcpy(nid.szTip, L"VolumeController");
+	lstrcpy(nid.szTip, TRAYICON_TIP);
 	Shell_NotifyIcon(NIM_ADD, &nid);
 
 	if (CoInitialize(NULL) != S_OK) {

@@ -20,6 +20,7 @@ IO::IO(HWND hWnd, Config* config) {
 	stopThread = false;
 	stopThreadPipe = false;
 	pipeConnected = false;
+	stopSerialRead = false;
 	this->hWnd = hWnd;
 
 	hThread = CreateThread(NULL, 0, threadRoutineStatic, this, 0, NULL);
@@ -61,16 +62,24 @@ bool IO::initSerialPort() {
 	}
 
 	serialConnected = true;
-	PostMessage(hWnd, MSG_CONNECTSUCCESS, 0, 0);
+	PostMessage(hWnd, MSG_SERIAL_CONNECTED, 0, 0);
 	return true;
 }
 
 void IO::closeSerialPort() {
 	if (!serialConnected) return;
-	CloseHandle(hSerialPort);
-	serialConnected = false;
 	DBG_PRINTW(L"closing serial port " << portName << endl);
-	PostMessage(hWnd, MSG_SERIALDISCONNECTED, 0, 0);
+	CloseHandle(hSerialPort);
+	stopSerialRead = false;
+	serialConnected = false;
+	PostMessage(hWnd, MSG_SERIAL_DISCONNECTED, 0, 0);
+}
+
+void IO::disconnectSerialPort() {
+	if (!serialConnected) return;
+	stopSerialRead = true;
+	DBG_PRINT("disconnecting serial port..." << endl);
+	while (serialConnected);
 }
 
 bool IO::isSerialConnected() {
@@ -157,7 +166,7 @@ void IO::threadRoutine() {
 			int pointer = 0;
 			char c[1];
 			DWORD bytesRead;
-			while (pointer < 99) {
+			while (!stopSerialRead && pointer < 99) {
 				BOOL r = ReadFile(hSerialPort, c, 1, &bytesRead, NULL);
 				if (!r) {
 					Utils::printLastError(L"ReadFile");
@@ -185,9 +194,11 @@ void IO::threadRoutine() {
 				messages.push(buffer);
 				cout << "[RX]: '" << buffer << "'" << endl;
 				pointer = 0;
-				PostMessage(hWnd, MSG_DATAARRIVED, 0, 0);
+				PostMessage(hWnd, MSG_SERIAL_DATAARRIVED, 0, 0);
 			}
 
+			if (stopSerialRead)
+				closeSerialPort();
 		}
 	}
 }
