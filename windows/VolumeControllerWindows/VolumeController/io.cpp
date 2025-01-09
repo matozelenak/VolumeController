@@ -1,6 +1,6 @@
+#include "globals.h"
 #include "io.h"
 #include "utils.h"
-#include "globals.h"
 #include <string>
 #include <iostream>
 
@@ -20,6 +20,7 @@ IO::IO(HWND hWnd, Config* config) {
 	stopThread = false;
 	stopThreadPipe = false;
 	pipeConnected = false;
+	stopSerialRead = false;
 	this->hWnd = hWnd;
 
 	hThread = CreateThread(NULL, 0, threadRoutineStatic, this, 0, NULL);
@@ -42,9 +43,13 @@ IO::~IO() {
 bool IO::initSerialPort() {
 	if (serialConnected) return false;
 	while (!messages.empty()) messages.pop();
-	wcout << L"opening serial port " << config->portName << L", baud: " << config->baudRate << endl;
+	this->portName = config->portName;
+	this->baudRate = config->baudRate;
+	this->comParity = config->parity;
+
+	DBG_PRINTW(L"opening serial port " << portName << L", baud: " << baudRate << endl);
 	wstring portPath = L"\\\\.\\";
-	portPath += config->portName;
+	portPath += portName;
 	hSerialPort = CreateFile(portPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (hSerialPort == INVALID_HANDLE_VALUE) {
 		Utils::printLastError(L"CreateFile");
@@ -52,19 +57,33 @@ bool IO::initSerialPort() {
 	}
 
 	if (!setCommParameters()) {
+		closeSerialPort();
 		return false;
 	}
 
 	serialConnected = true;
-	PostMessage(hWnd, MSG_CONNECTSUCCESS, 0, 0);
+	PostMessage(hWnd, MSG_SERIAL_CONNECTED, 0, 0);
 	return true;
 }
 
 void IO::closeSerialPort() {
 	if (!serialConnected) return;
+	DBG_PRINTW(L"closing serial port " << portName << endl);
 	CloseHandle(hSerialPort);
+	stopSerialRead = false;
 	serialConnected = false;
-	cout << "closing serial port";
+	PostMessage(hWnd, MSG_SERIAL_DISCONNECTED, 0, 0);
+}
+
+void IO::disconnectSerialPort() {
+	if (!serialConnected) return;
+	stopSerialRead = true;
+	DBG_PRINT("disconnecting serial port..." << endl);
+	while (serialConnected);
+}
+
+bool IO::isSerialConnected() {
+	return serialConnected;
 }
 
 void IO::cleanup() {
@@ -147,7 +166,7 @@ void IO::threadRoutine() {
 			int pointer = 0;
 			char c[1];
 			DWORD bytesRead;
-			while (pointer < 99) {
+			while (!stopSerialRead && pointer < 99) {
 				BOOL r = ReadFile(hSerialPort, c, 1, &bytesRead, NULL);
 				if (!r) {
 					Utils::printLastError(L"ReadFile");
@@ -175,9 +194,11 @@ void IO::threadRoutine() {
 				messages.push(buffer);
 				cout << "[RX]: '" << buffer << "'" << endl;
 				pointer = 0;
-				PostMessage(hWnd, MSG_DATAARRIVED, 0, 0);
+				PostMessage(hWnd, MSG_SERIAL_DATAARRIVED, 0, 0);
 			}
 
+			if (stopSerialRead)
+				closeSerialPort();
 		}
 	}
 }
@@ -424,4 +445,15 @@ void IO::sendPipe(string data) {
 
 	CloseHandle(olWrite.hEvent);
 
+}
+
+bool IO::isPipeConnected() {
+	return pipeConnected;
+}
+
+void IO::configChanged() {
+	if (config->portName != portName || config->baudRate != baudRate || config->parity != comParity) {
+		closeSerialPort();
+		initSerialPort();
+	}
 }

@@ -2,6 +2,7 @@
 #include "volume_manager.h"
 #include "io.h"
 #include "structs.h"
+#include "channel.h"
 #include "utils.h"
 
 #include <vector>
@@ -10,13 +11,30 @@
 #include <sstream>
 using namespace std;
 
-Controller::Controller(VolumeManager* mgr, Config* config) {
-	this->mgr = mgr;
+Controller::Controller(HWND hWnd, Config* config, IO* io) {
+	this->hWnd = hWnd;
 	this->config = config;
+	this->io = io;
+	mgr = new VolumeManager(this);
+	if (!mgr->initialize(hWnd)) {
+		DBG_PRINT("Error: VolumeManager failed to initialize");
+	}
+	this->sessionPool = mgr->getSessionPoolAddr();
+	this->devicePool = mgr->getDevicePoolAddr();
+
+	notif = new AudioDeviceNotification(this);
+	mgr->getDeviceEnumerator()->RegisterEndpointNotificationCallback(notif);
 }
 
 Controller::~Controller() {
+	mgr->getDeviceEnumerator()->UnregisterEndpointNotificationCallback(notif);
+	delete notif;
+	delete mgr;
+}
 
+void Controller::rescanAndRemap() {
+	mgr->scanDevicesAndSessions();
+	mapChannels();
 }
 
 void Controller::mapChannels() {
@@ -24,27 +42,31 @@ void Controller::mapChannels() {
 	// to 0: (master) 1: (system, ...), 3:
 	channels.clear();
 	for (int i = 0; i < 6; i++) {
-		channels.push_back(Channel{i});
+		channels.push_back(Channel(i));
 	}
-	sessions.clear();
-	sessions = mgr->discoverSessions();
 
 	// map volumes
-	vector<bool> chVolUsed(sessions.size());
-	int chVolOther = -1;
+	vector<bool> chVolUsed(sessionPool->size());
+	chVolOther = -1;
 	// iterate channels
 	for (int i = 0; i < config->channels.size(); i++) {
 		// iterate applications for that channel
 		for (int j = 0; j < config->channels[i].size(); j++) {
-			if (config->channels[i][j] != L"other") {
-
-				channels[i].sessions.push_back(config->channels[i][j]);
+			wstring sessionName = config->channels[i][j];
+			if (sessionName == L"master") {
+				PAudioDevice oDevice = mgr->getDefaultOutputDevice();
+				if (oDevice)
+					channels[i].addSession(oDevice);
+			}
+			else if (sessionName != L"other") {
+				vector<PISession> sessions = mgr->getSession(sessionName);
+				for (PISession& session : sessions)
+					channels[i].addSession(session);
 
 				// find which one is it
-				for (int k = 0; k < sessions.size(); k++) {
-					if (sessions[k].filename == config->channels[i][j]) {
+				for (int k = 0; k < sessionPool->size(); k++) {
+					if (sessionPool->at(k)->getName() == sessionName) {
 						chVolUsed[k] = true;
-						break;
 					}
 				}
 			}
@@ -56,29 +78,84 @@ void Controller::mapChannels() {
 	}
 	// map all other unassigned applications
 	if (chVolOther != -1) {
-		for (int i = 0; i < sessions.size(); i++) {
+		for (int i = 0; i < sessionPool->size(); i++) {
 			if (!chVolUsed[i])
-				channels[chVolOther].sessions.push_back(sessions[i].filename);
+				channels[chVolOther].addSession(sessionPool->at(i));
 		}
 	}
 }
 
-void Controller::adjustVolume(int ch, int value) {
-	for (wstring name : channels[ch].sessions) {
-		if (name == L"master")
-			mgr->setOutputDeviceVolume(value / 100.0);
-		else
-			mgr->setSessionVolume(name, value / 100.0);
+void Controller::addSession(PISession session) {
+	wstring name = session->getName();
+	for (int i = 0; i < config->channels.size(); i++) {
+		vector<wstring> channel = config->channels[i];
+		for (int j = 0; j < channel.size(); j++) {
+			if (channel[j] == name) {
+				channels[i].addSession(session);
+				DBG_PRINTW(L"added " << name << " to channel " << i << endl);
+				update();
+				return;
+			}
+		}
+	}
+
+	// not found, add to the channel which has 'other'
+	if (chVolOther != -1) {
+		channels[chVolOther].addSession(session);
+		DBG_PRINTW(L"added " << name << " to volOther (" << chVolOther << L")" << endl);
+		update();
 	}
 }
 
-void Controller::adjustMute(int ch, bool mute) {
-	for (wstring name : channels[ch].sessions) {
-		if (name == L"master") 
-			mgr->setOutputDeviceMute(mute);
-		else
-			mgr->setSessionMute(name, mute);
+void Controller::createSession(IAudioSessionControl* newSession) {
+	for (PAudioSession& session : *sessionPool) {
+		CComPtr<IAudioSessionControl> control = session->getSessionControl();
+		if (control == newSession) {
+			DBG_PRINTW(L"this session already exists: " << session->getName() << endl);
+			return;
+		}
 	}
+	PAudioSession session = make_shared<AudioSession>(newSession, this);
+	sessionPool->push_back(session);
+	addSession(session);
+}
+
+void Controller::sessionDestroyed() {
+	for (Channel& channel : channels) {
+		channel.removeDestroyedSessions();
+	}
+
+	for (int i = 0; i < sessionPool->size(); i++) {
+		PAudioSession& session = sessionPool->at(i);
+		if (session->getState() == AudioSessionStateExpired) {
+			sessionPool->erase(sessionPool->begin() + i);
+			i--;
+		}
+	}
+
+	update();
+}
+
+void Controller::defaultDeviceChanged(EDataFlow flow, ERole role) {
+	if (flow == eRender && role == eConsole) {
+		DBG_PRINT("default output device was changed" << endl);
+		rescanAndRemap();
+		update();
+	}
+}
+
+void Controller::deviceAddedOrRemoved() {
+	//cout << "device added or removed" << endl;
+}
+
+void Controller::adjustVolume(int ch, int value) {
+	if (ch < 0 || ch > 5) return;
+	channels[ch].setVolume(value);
+}
+
+void Controller::adjustMute(int ch, bool mute) {
+	if (ch < 0 || ch > 5) return;
+	channels[ch].setMute(mute);
 }
 
 string Controller::makeVolumeRequest() {
@@ -96,23 +173,7 @@ string Controller::makeVolumeCmd() {
 string Controller::makeMuteCmd() {
 	vector<int> chMute(6);
 	for (Channel& channel : channels) {
-		for (wstring session : channel.sessions) {
-			if (session == L"master") {
-				chMute[channel.id] = mgr->getOutputDeviceMute();
-				break;
-			}
-			else {
-				for (AudioSession& aSession : sessions) {
-					if (aSession.filename == session) {
-						chMute[channel.id] = mgr->getSessionMute(session);
-						goto end_iterateChannelSessions;
-					}
-				}
-			}
-		}
-
-	end_iterateChannelSessions:
-		;
+		chMute[channel.getID()] = channel.isMuted();
 	}
 
 	return Utils::makeCmdAllVals('M', chMute);
@@ -121,35 +182,27 @@ string Controller::makeMuteCmd() {
 string Controller::makeActiveDataCmd() {
 	vector<int> chActive(6);
 	for (Channel& channel : channels) {
-		for (wstring session : channel.sessions) {
-			if (session == L"master") {
-				chActive[channel.id] = true;
-				break;
-			}
-			else {
-				for (AudioSession& aSession : sessions) {
-					if (aSession.filename == session) {
-						chActive[channel.id] = true;
-						goto end_iterateChannelSessions;
-					}
-				}
-			}
-		}
-
-	end_iterateChannelSessions:
-		;
+		chActive[channel.getID()] = channel.isActive();
 	}
 
 	return Utils::makeCmdAllVals('A', chActive);
 }
 
-void Controller::update(IO* io) {
+void Controller::update() {
 	io->send(makeActiveDataCmd());
 	io->send(makeMuteCmd());
 	io->send(makeVolumeRequest());
 	io->send(makeMuteRequest());
 }
 
-vector<AudioSession> Controller::getSessions() {
-	return sessions;
+VolumeManager* Controller::getVolumeManager() {
+	return mgr;
+}
+
+vector<Channel>& Controller::getChannels() {
+	return channels;
+}
+
+HWND Controller::getHWND() {
+	return hWnd;
 }

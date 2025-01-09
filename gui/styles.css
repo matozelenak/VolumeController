@@ -1,3 +1,13 @@
+:root {
+    --session-item-bg-green: rgb(233, 255, 235);
+    --session-item-bg-yellow: rgb(255, 250, 210);
+    --session-item-bg-red: rgb(255, 234, 234);
+}
+
+* {
+    font-family: 'Segoe UI', sans-serif;
+}
+
 .container {
     /* border: 1px solid black; */
 }
@@ -17,16 +27,53 @@
 }
 
 .status-bar {
-    
+    display: flex;
+    justify-content: space-between;
 }
 
-.status-bar span span:nth-child(3) {
+.status-bar-text span:nth-child(3) {
     margin-left: 30px;
 }
 
-.status-bar a.btn {
-    margin-left: 30px;
+.status-bar-buttons .btn {
+    margin-left: 20px;
+    background-color: transparent;
+    color: rgb(36, 36, 36);
+    transition-duration: 0.3s;
+    border-radius: 50%;
+    width: 1em;
+    height: 1.6em;
 }
+
+.status-bar-buttons .btn:hover {
+    background-color: rgb(199, 199, 199);
+    color: rgb(36, 36, 36);
+    transform: scale(1.05);
+}
+
+.btn {
+    display: inline-block;
+    text-decoration: none;
+    color: black;
+    background-color: rgb(177, 177, 177);
+    padding: 5px 10px;
+    text-align: center;
+    transition-duration: 0.3s;
+}
+.btn-save {
+    width: 3em;
+    background-color: rgb(122, 212, 122);
+}
+.btn-save:hover {
+    background-color: rgb(89, 165, 89);
+}
+.btn-cancel {
+    width: 3em;
+}
+.btn-cancel:hover {
+    background-color: rgb(134, 134, 134);
+}
+
 
 .channel-display {
     display: flex;
@@ -76,21 +123,6 @@
     
 }
 
-.button-bar {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    padding-left: 20px;
-}
-
-.btn {
-    display: inline-block;
-    text-decoration: none;
-    color: black;
-    background-color: rgb(177, 177, 177);
-    padding: 5px 10px;
-    text-align: center;
-}
-
 
 .dialog {
     position: absolute;
@@ -98,7 +130,8 @@
     left: 50%;
     transform: translate(-50%, -50%);
     display: none;
-    width: 600px;
+    width: 100%;
+    max-width: 600px;
     height: 400px;
     /* background-color: rgb(224, 224, 224); */
     background-color: white;
@@ -121,6 +154,10 @@
     margin: 5px;
 }
 
+.dialog-close-icon i {
+    font-size: 1.2em;
+}
+
 .dialog-inner {
     display: flex;
     flex-direction: column;
@@ -129,32 +166,30 @@
     height: 90%;
 }
 
-.dialog-session-list {
+.dialog-session-list, .dialog-settings-list {
     list-style-type: none;
     padding: 0;
     overflow: auto;
 }
 
-.session-item {
-    border-bottom: 1px solid rgb(163, 163, 163);
-    margin-top: 20px;
+.session-item, .setting-item {
+    border-bottom: 1px solid rgb(190, 190, 190);
+    margin-top: 5px;
+    padding-top: 10px;
     display: flex;
     justify-content: space-between;
 }
 
-.session-item .session-name {
 
-}
-
-.session-item .session-ch {
+/* .session-item .session-ch {
     display: inline-block;
-    /* border: 1px solid green; */
+    border: 1px solid green;
     width: 22px;
     height: 22px;
     border-radius: 5px;
     text-align: center;
     background-color: rgb(121, 201, 121);
-}
+} */
 
 .session-item .session-ch-btns {
     margin-right: 10px;
@@ -172,22 +207,54 @@
     border: 1px solid rgb(122, 212, 122);
     border-radius: 5px;
     transition-duration: 0.3s;
+    background-color: white;
+}
+
+.session-item .addbtn:hover {
+    background-color: rgb(218, 255, 218);
 }
 
 .session-item .addbtn.selected {
     background-color: rgb(122, 212, 122);
 }
 
-.dialog-btn-bar {
-    display: flex;
-    justify-content: flex-end;
-    column-gap: 20px;
+.setting-item .setting-select {
+    margin-right: 5px;
+    margin-bottom: 2px;
+}
+.setting-item .setting-numinput {
+    -moz-appearance: textfield;
+    margin-right: 5px;
+    margin-bottom: 2px;
+    text-align: right;
+    max-width: 100px;
+}
+.setting-item .setting-numinput::-webkit-outer-spin-button,
+.setting-item .setting-numinput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
 }
 
-#btn-save-config {
-    width: 3em;
-    background-color: rgb(122, 212, 122);
+.dialog-btn-bar {
+    display: flex;
+    justify-content: space-between
+    /* column-gap: 20px; */
 }
-#btn-cancel-config {
-    width: 3em;
+
+#btn-add-session {
+    background-color: white;
+    border-radius: 50%;
+    padding: 5px 10px;
+    width: 1em;
+    height: 1.6em;
+    transition-duration: 0.3s;
 }
+
+#btn-add-session:hover {
+    background-color: rgb(199, 199, 199);
+}
+
+
+.dialog-btn-bar .btn:first-child {
+    margin-right: 10px;
+}
+

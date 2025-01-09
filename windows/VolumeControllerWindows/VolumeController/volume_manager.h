@@ -2,56 +2,50 @@
 
 #include "structs.h"
 #include "session_notification.h"
+#include "session_interface.h"
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <atlbase.h>
 #include <mmdeviceapi.h>
 #include <endpointvolume.h>
 #include <audiopolicy.h>
 
+class Controller;
+
 class VolumeManager {
 
 public:
-	VolumeManager();
+	VolumeManager(Controller* controller);
 	~VolumeManager();
 
 	bool initialize(HWND hWnd);
-	std::vector<std::wstring> scanOutputDevices();
-
-	void useOutputDevice(std::wstring name);
-	void useDefaultOutputDevice();
-	void setOutputDeviceVolume(float volume);
-	float getOutputDeviceVolume();
-	void setOutputDeviceMute(bool mute);
-	bool getOutputDeviceMute();
+	void scanDevicesAndSessions();
 	
-	std::vector<AudioSession> discoverSessions();
-	void setSessionVolume(int index, float volume);
-	void setSessionVolume(std::wstring name, float volume);
-	float getSessionVolume(int index);
-	float getSessionVolume(std::wstring name);
-	void setSessionMute(int index, bool mute);
-	void setSessionMute(std::wstring name, bool mute);
-	bool getSessionMute(int index);
-	bool getSessionMute(std::wstring name);
+	std::vector<PAudioSession>& getSessionPool();
+	std::vector<PAudioDevice>& getDevicePool();
+
+	std::vector<PAudioSession>* getSessionPoolAddr();
+	std::vector<PAudioDevice>* getDevicePoolAddr();
+
+	std::vector<PISession> getSession(std::wstring name);
+	PAudioDevice getDefaultOutputDevice();
+
+	void disposeSessionsAndDevices();
+	CComPtr<IMMDeviceEnumerator> getDeviceEnumerator();
 
 	void cleanup();
 
 private:
-	int sessionNameToIndex(std::wstring name);
-	CComPtr<IMMDeviceEnumerator> deviceEnumerator;
-	CComPtr<IMMDeviceCollection> outputDevices;
-	std::vector<std::wstring> outputDevicesNames;
-	CComPtr<IMMDevice> currentDevice;
-	CComPtr<IAudioEndpointVolume> currentDeviceVolume;
-	bool useDefOutDevice;
-	std::wstring deviceNameToUse;
-	void initCurrentOutputDevice();
+	void scanDeviceSessions(PAudioDevice device);
 
-	CComPtr<IAudioSessionManager2> sessionManager;
-	std::vector<AudioSession> audioSessions;
-	SessionCreatedNotification* sessionNotification;
+	std::vector<PAudioSession> _sessionPool;
+	std::vector<PAudioDevice> _devicePool;
 
-	std::vector<InputDevice> inputDevices;
+	CComPtr<IMMDeviceEnumerator> _deviceEnumerator;
+	CComPtr<IMMDeviceCollection> _outputDevices;
+
+	Controller* controller;
+
 };
