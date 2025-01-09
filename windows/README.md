@@ -1,12 +1,28 @@
 # Softvér na Windows
 
+## Obsah
+
+- [Informácie](#informácie)
+- Kompilácia
+    - [cez Visual Studio](#kompilácia-cez-visual-studio) (jednoduchšie, zaberá viac miesta)
+    - [cez príkazový riadok](#kompilácia-cez-príkazový-riadok) (zložitejšie, menej miesta)
+
+## Informácie
+
 > [!NOTE]
-> work in progress
+> TODO
+
+## Kompilácia cez Visual Studio
+
+> [!NOTE]
+> TODO
 
 Priečinok [VolumeControllerWindows](VolumeControllerWindows/) je celý Solution, ktorý sa dá otvoriť vo Visual Studio 2019.
 
-Chýbajúce časti:
-- prepojenie s GUI
+## Kompilácia cez príkazový riadok
+
+> [!NOTE]
+> TODO
 
 ## Third-Party Libraries
 This project uses the following third-party libraries:
