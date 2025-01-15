@@ -144,9 +144,17 @@
 }
 
 .dialog-header {
-    text-align: right;
+    display: flex;
+    /* text-align: right; */
+    justify-content: space-between;
     margin-top: 5px;
     margin-right: 5px;
+}
+
+.dialog-title {
+    margin: 5px;
+    margin-left: 20px;
+    color: rgb(46, 46, 46);
 }
 
 .dialog-close-icon {
