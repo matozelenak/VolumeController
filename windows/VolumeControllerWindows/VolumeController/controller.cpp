@@ -38,8 +38,6 @@ void Controller::rescanAndRemap() {
 }
 
 void Controller::mapChannels() {
-	// convert 0: (master) 1: (system, other), 3: (Discord.exe, Teams.exe)
-	// to 0: (master) 1: (system, ...), 3:
 	channels.clear();
 	for (int i = 0; i < 6; i++) {
 		channels.push_back(Channel(i));

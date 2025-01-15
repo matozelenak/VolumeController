@@ -79,7 +79,7 @@ void IO::disconnectSerialPort() {
 	if (!serialConnected) return;
 	stopSerialRead = true;
 	DBG_PRINT("disconnecting serial port..." << endl);
-	while (serialConnected);
+	while (serialConnected) Sleep(100);
 }
 
 bool IO::isSerialConnected() {
