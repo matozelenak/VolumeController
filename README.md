@@ -14,6 +14,7 @@
 - [Arduino kód](arduino/README.md)
 - [Softvér na Windows](windows/README.md)
 - [Softvér na Linux](linux/README.md)
+- [GUI](gui/README.md)
 
 ## 3D tlač
 
