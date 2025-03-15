@@ -45,8 +45,9 @@ function handleConnectPipe(event) {
         win.webContents.send('main:backendStatus', pipeConnected)
     })
 
-    client.on('error', () => {
+    client.on('error', (err) => {
         console.log('Error occured in pipe communication')
+        console.log(err)
     })
 }
 
