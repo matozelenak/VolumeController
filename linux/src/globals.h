@@ -11,6 +11,8 @@
 #endif
 
 #define PIPE_PATH "/tmp/VolumeControllerPipe"
+#define APPLICATION_NAME "VolumeController"
 
 class IO;
 template <typename T> class ThreadedQueue;
+class VolumeManager;
