@@ -2,6 +2,8 @@
 #include "globals.h"
 #include "threaded_queue.h"
 #include "msg.h"
+
+#include <sys/un.h>
 #include <pthread.h>
 #include <string>
 #include <memory>
@@ -34,7 +36,8 @@ private:
     bool _running;
     bool _isSerialConnected;
     bool _reinitSerial;
-    int _fdPipe;
+    int _fdSocket;
+    sockaddr_un addr;
 
     pthread_t _thread;
     std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;

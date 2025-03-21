@@ -9,6 +9,8 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include <iostream>
 #include <string>
@@ -21,7 +23,11 @@ IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue)
     _fdSerialPort = -1;
     _isSerialConnected = false;
     _running = false;
-    _fdPipe = -1;
+
+    _fdSocket = -1;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, PIPE_PATH, sizeof(addr.sun_path)-1);
 }
 
 IO::~IO() {
@@ -36,18 +42,25 @@ bool IO::init() {
     _running = true;
     _reinitSerial = false;
 
-    LOG("creating FIFO...");
-    if (mkfifo(PIPE_PATH, 0666) == -1) {
-        if (errno == EEXIST) {
-            LOG("pipe already exists");
-        }
-        else {
-            ERR("mkfifo()");
-            return false;
-        }
+    _fdSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (_fdSocket == -1) {
+        ERR("socket()");
+        return false;
+    }
+    unlink(PIPE_PATH);
+    
+    if (bind(_fdSocket, (sockaddr*)&addr, sizeof(addr)) == -1) {
+        ERR("bind()");
+        close(_fdSocket);
+        return false;
     }
 
-    
+    if (listen(_fdSocket, 2) == -1) {
+        ERR("listen()");
+        close(_fdSocket);
+        return false;
+    }
+    LOG("socket fd: " << _fdSocket << ", bound and listenning...");
 
     pthread_create(&_thread, NULL, _threadRoutineStatic, this);
 
@@ -92,6 +105,8 @@ bool IO::_reinitSerialPort() {
     }
     LOG("tty paramaters set");
 
+    _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_CONNECTED, ""});
+
     return true;
 }
 
@@ -102,6 +117,7 @@ bool IO::_closeSerialPort() {
     close(_fdSerialPort);
     _isSerialConnected = false;
     _fdSerialPort = -1;
+    _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DISCONNECTED, ""});
     return true;
 }
 
@@ -181,19 +197,14 @@ void* IO::_threadRoutineStatic(void* param) {
 void IO::_threadRoutine(void* param) {
     LOG("IO thread started");
 
-    LOG("opening FIFO...");
-    _fdPipe = open(PIPE_PATH, O_RDWR);
-    if (_fdPipe == -1) {
-        ERR("pipe open()");
-        _running = false;
-    }
-    LOG("FIFO fd: " << _fdPipe);
-
     // _reinitSerialPort();
-    pollfd fds[2];
-    fds[0].fd = -1;
-    fds[0].events = POLLIN;
-    fds[1].fd = _fdPipe;
+    const int POLL_FDSIZE = 4;
+    pollfd fds[POLL_FDSIZE];
+    for (int i = 0; i < POLL_FDSIZE; i++) {
+        fds[i].fd = -1;
+        fds[i].events = POLLIN;
+    }
+    fds[1].fd = _fdSocket;
     fds[1].events = POLLIN;
     char comBuffer[1024];
     int comBufferPosition = 0;
@@ -207,15 +218,12 @@ void IO::_threadRoutine(void* param) {
         else fds[0].fd = -1;
         // TODO if is pipe connected then set fd
 
-        int numFDs = poll(fds, 2, 1000);
+        int numFDs = poll(fds, POLL_FDSIZE, 1000);
         if (numFDs == -1) {
             ERR("poll()");
         }
-        else if (numFDs == 0) {
-            // timeout
-            // LOG("poll() timeout");
-        }
         else {
+            // serial port
             if (fds[0].revents & POLLIN) {
                 // read from serial port
                 char c;
@@ -249,23 +257,50 @@ void IO::_threadRoutine(void* param) {
                 }
             }
 
+            // server socket
             if (fds[1].revents & POLLIN) {
+                int clientFd = accept(_fdSocket, nullptr, nullptr);
+                if (clientFd == -1) {
+                    ERR("accept()");
+                } else {
+                    fds[2].fd = clientFd;
+                    LOG("client accepted, fd: " << clientFd);
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_CONNECTED, ""});
+                }
+            }
+
+            // gui client socket
+            if (fds[2].revents & POLLIN) {
                 char buffer[1024];
-                int bytesRead = read(_fdPipe, buffer, sizeof(buffer)-1);
+                int bytesRead = read(fds[2].fd, buffer, sizeof(buffer)-1);
                 if (bytesRead == -1) {
-                    ERR("pipe read()");
+                    ERR("socket read()");
+                    close(fds[2].fd);
+                    fds[2].fd = -1;
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else if (bytesRead == 0) {
-                    LOG("pipe read() returned 0");
+                    LOG("socket read() returned 0");
+                    close(fds[2].fd);
+                    fds[2].fd = -1;
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else {
                     buffer[bytesRead] = '\0';
-                    LOG("[pRX]: " << buffer);
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DATA, std::string(buffer)});
                 }
             }
         }
     } // end while running
     LOG("IO thread stopping...");
+
+    if (fds[2].fd != -1) {
+        close(fds[2].fd);
+    }
+    if (_fdSocket != -1) {
+        close(_fdSocket);
+    }
+    unlink(PIPE_PATH);
     _closeSerialPort();
     _msgQueue->pushAndSignal(Msg{MsgType::EXIT, "stop"});
 }

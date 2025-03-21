@@ -8,17 +8,20 @@
 #include "io.h"
 #include "threaded_queue.h"
 #include "msg.h"
+#include "volume_manager.h"
 
 using namespace std;
 
 shared_ptr<IO> io;
 shared_ptr<ThreadedQueue<Msg>> msgQueue;
+shared_ptr<VolumeManager> mgr;
 bool running;
 
 void signal_handler(int sig) {
     switch(sig) {
         case SIGINT:
             io->stop();
+            // mgr->stop();
             running = false;
             break;
         default:
@@ -34,6 +37,9 @@ int main() {
 
     msgQueue = make_shared<ThreadedQueue<Msg>>();
     io = make_shared<IO>(msgQueue);
+    mgr = make_shared<VolumeManager>(msgQueue);
+
+    mgr->init();
 
     if(!io->init()) {
         LOG("failed to initialize IO");
@@ -50,7 +56,7 @@ int main() {
         while (!msgQueue->empty()) {
             Msg msg = msgQueue->front();
             msgQueue->pop();
-            LOG("data: " << msg.data);
+            LOG("[MSG] " << (int) msg.type << " data: " << msg.data);
             switch (msg.type)
             {
             case MsgType::EXIT:
@@ -58,6 +64,11 @@ int main() {
             case MsgType::SERIAL_DATA:
                 break;
             case MsgType::PIPE_DATA:
+                break;
+            case MsgType::PA_CONTEXT_READY:
+                mgr->listSinks();
+                break;
+            case MsgType::PA_CONTEXT_DISCONNECTED:
                 break;
             default:
                 break;
@@ -69,6 +80,7 @@ int main() {
     }
 
     io->wait();
+    mgr->wait();
 
     return 0;
 }
