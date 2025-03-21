@@ -44,7 +44,7 @@ void VolumeManager::stop() {
 }
 
 void VolumeManager::wait() {
-    LOG("waiting for PulseAudio mainloop to finish...");
+    LOG("stopping PulseAudio mainloop...");
     pa_context_disconnect(_context);
     pa_threaded_mainloop_stop(_mainloop);
     pa_threaded_mainloop_wait(_mainloop);

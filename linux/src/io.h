@@ -27,7 +27,6 @@ private:
     bool _openSerialPort();
     bool _setSerialParams();
 
-    static void* _threadRoutineStatic(void* param);
     void _threadRoutine(void* param);
 
     int _fdSerialPort;

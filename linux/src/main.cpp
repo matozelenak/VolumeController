@@ -1,5 +1,6 @@
 #include "globals.h"
 #include <signal.h>
+#include <pthread.h>
 
 #include <iostream>
 #include <string>
@@ -16,24 +17,36 @@ shared_ptr<IO> io;
 shared_ptr<ThreadedQueue<Msg>> msgQueue;
 shared_ptr<VolumeManager> mgr;
 bool running;
+pthread_t thSignal;
 
-void signal_handler(int sig) {
-    switch(sig) {
-        case SIGINT:
-            io->stop();
-            // mgr->stop();
+void* signalThread(void *param) {
+    int sig;
+    sigset_t *set = static_cast<sigset_t*>(param);
+
+    while (1) {
+        sigwait(set, &sig);
+        if (sig == SIGINT) {
+            LOG("SIGINT received in signal thread");
             running = false;
+            io->stop();
+            msgQueue->pushAndSignal(Msg{MsgType::EXIT, "stopped by SIGINT"});
             break;
-        default:
-            break;
+        }
     }
+
+    return NULL;
 }
 
 int main() {
     LOG("Arduino Volume Controller");
     running = true;
 
-    signal(SIGINT, signal_handler);
+    // block SIGINT in current thread, new threads should inherit the changes
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    pthread_create(&thSignal, NULL, signalThread, &set);
 
     msgQueue = make_shared<ThreadedQueue<Msg>>();
     io = make_shared<IO>(msgQueue);
@@ -47,7 +60,7 @@ int main() {
     }
     io->reopenSerialPort();
 
-    while (running) {
+    while (true) {
         msgQueue->lock();
         while (msgQueue->empty()) {
             msgQueue->wait();
@@ -60,6 +73,7 @@ int main() {
             switch (msg.type)
             {
             case MsgType::EXIT:
+                msgQueue->unlock();
                 goto end_while;
             case MsgType::SERIAL_DATA:
                 break;
@@ -74,13 +88,14 @@ int main() {
                 break;
             }
         }
-        end_while: ;
-
+        
         msgQueue->unlock();
     }
+    end_while: ;
 
     io->wait();
     mgr->wait();
+    pthread_join(thSignal, NULL);
 
     return 0;
 }

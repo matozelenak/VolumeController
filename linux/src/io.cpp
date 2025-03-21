@@ -62,7 +62,11 @@ bool IO::init() {
     }
     LOG("socket fd: " << _fdSocket << ", bound and listenning...");
 
-    pthread_create(&_thread, NULL, _threadRoutineStatic, this);
+    pthread_create(&_thread, NULL, [](void *param) {
+        IO* instance = static_cast<IO*>(param);
+        instance->_threadRoutine(NULL);
+        return (void*) NULL;
+    }, this);
 
     return true;
 }
@@ -187,17 +191,10 @@ bool IO::_setSerialParams() {
     return true;
 }
 
-
-void* IO::_threadRoutineStatic(void* param) {
-    IO* instance = (IO*) param;
-    instance->_threadRoutine(NULL);
-    return NULL;
-}
-
 void IO::_threadRoutine(void* param) {
     LOG("IO thread started");
 
-    // _reinitSerialPort();
+    // serialPort, serverSocket, guiClientSocket, cliClientSocket (maybe)
     const int POLL_FDSIZE = 4;
     pollfd fds[POLL_FDSIZE];
     for (int i = 0; i < POLL_FDSIZE; i++) {
@@ -216,7 +213,6 @@ void IO::_threadRoutine(void* param) {
 
         if (_isSerialConnected) fds[0].fd = _fdSerialPort;
         else fds[0].fd = -1;
-        // TODO if is pipe connected then set fd
 
         int numFDs = poll(fds, POLL_FDSIZE, 1000);
         if (numFDs == -1) {
@@ -237,8 +233,6 @@ void IO::_threadRoutine(void* param) {
                 else {
                     if (c == '\n') {
                         comBuffer[comBufferPosition] = '\0';
-                        // do smth
-                        // LOG("[RX]: '" << comBuffer << "'");
                         _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
                         comBufferPosition = 0;
                     }
@@ -250,7 +244,6 @@ void IO::_threadRoutine(void* param) {
                     if (comBufferPosition == sizeof(comBuffer)-1) {
                         // the buffer is full, output it
                         comBuffer[comBufferPosition] = '\0';
-                        // LOG("[RX]: '" << comBuffer << "'");
                         _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
                         comBufferPosition = 0;
                     }
@@ -302,5 +295,4 @@ void IO::_threadRoutine(void* param) {
     }
     unlink(PIPE_PATH);
     _closeSerialPort();
-    _msgQueue->pushAndSignal(Msg{MsgType::EXIT, "stop"});
 }
