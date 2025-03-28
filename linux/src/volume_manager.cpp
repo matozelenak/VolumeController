@@ -1,6 +1,7 @@
 #include "volume_manager.h"
 #include "threaded_queue.h"
 #include "msg.h"
+#include "session.h"
 
 #include <pulse/thread-mainloop.h>
 #include <pulse/context.h>
@@ -9,6 +10,7 @@
 
 #include <iostream>
 #include <memory>
+#include <cmath>
 using namespace std;
 
 VolumeManager::VolumeManager(shared_ptr<ThreadedQueue<Msg>> msgQueue)
@@ -52,16 +54,17 @@ void VolumeManager::wait() {
     pa_threaded_mainloop_free(_mainloop);
 }
 
-void VolumeManager::listSinks() {
+void VolumeManager::listSinks(bool lock) {
     if (!_isContextConnected) return;
-    lock();
+    if (lock) this->lock();
+    _devicePool.clear();
     pa_context_get_sink_info_list(_context,
         [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
             VolumeManager* instance = static_cast<VolumeManager*>(userdata);
             if (instance) instance->listSinksCallback(c, i, eol);
         },
         this);
-    unlock();
+    if (lock) unlock();
 }
 
 void VolumeManager::contextCallback(pa_context *c) {
@@ -89,13 +92,29 @@ void VolumeManager::contextCallback(pa_context *c) {
 }
 
 void VolumeManager::listSinksCallback(pa_context *c, const pa_sink_info *i, int eol) {
-    if (eol) return;
-    LOG("Sink " << i->index << ", name: " << i->name << ", desc: " << i->description);
-    pa_cvolume vol = i->volume;
-    for (int i = 0; i < vol.channels; i++) {
-        LOG("  volume ch: " << i << ": " << vol.values[i]/65540.0*100 << "%");
+    if (eol) {
+        for (Session &dev : _devicePool) {
+            LOG(" device index #" << dev.index);
+            LOG("  name: " << dev.name);
+            LOG("  desc: " << dev.description);
+            LOG("  volume: "<< dev.volume);
+            LOG("  mute: " << dev.muted);
+        }
+        LOG("--total devices: " << _devicePool.size());
+        return;
     }
-    LOG("  mute: " << i->mute);
+    pa_cvolume vol = i->volume;
+    Session dev;
+    dev.pid = -1;
+    dev.index = i->index;
+    dev.name = i->name;
+    dev.description = i->description;
+    if (vol.channels >= 2) dev.volume = (vol.values[0] + vol.values[1]) / 2;
+    else if (vol.channels >= 1) dev.volume = vol.values[0];
+    else dev.volume = 0;
+    dev.volume = floor((dev.volume / ((double)PA_VOLUME_NORM)) * 100.0) / 100.0;
+    dev.muted = i->mute ? true : false;
+    _devicePool.push_back(dev);
 }
 
 void VolumeManager::lock() {
