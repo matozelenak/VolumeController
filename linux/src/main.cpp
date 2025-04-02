@@ -66,30 +66,56 @@ int main() {
             msgQueue->wait();
         }
 
-        while (!msgQueue->empty()) {
-            Msg msg = msgQueue->front();
-            msgQueue->pop();
-            LOG("[MSG] " << (int) msg.type << " data: " << msg.data);
-            switch (msg.type)
-            {
-            case MsgType::EXIT:
-                msgQueue->unlock();
-                goto end_while;
-            case MsgType::SERIAL_DATA:
-                break;
-            case MsgType::PIPE_DATA:
-                break;
-            case MsgType::PA_CONTEXT_READY:
-                mgr->listSinks();
-                break;
-            case MsgType::PA_CONTEXT_DISCONNECTED:
-                break;
-            default:
-                break;
-            }
+        Msg msg = msgQueue->front();
+        msgQueue->pop();
+        msgQueue->unlock();
+        LOG("[MSG] " << (int) msg.type << " data: '" << msg.data << "'");
+        switch (msg.type)
+        {
+        case MsgType::EXIT:
+            goto end_while;
+        case MsgType::SERIAL_DATA:
+            break;
+        case MsgType::PIPE_DATA:
+            break;
+        case MsgType::PA_CONTEXT_READY:
+            mgr->listSinks_sync();
+            mgr->listSinkInputs_sync();
+            break;
+        case MsgType::PA_CONTEXT_DISCONNECTED:
+            break;
+
+        case MsgType::SINK_ADDED:
+            LOG("[EVENT] sink #" << msg.data << " added");
+            break;
+        case MsgType::SINK_CHANGED:
+            LOG("[EVENT] sink #" << msg.data << " changed");
+            break;
+        case MsgType::SINK_REMOVED:
+            LOG("[EVENT] sink #" << msg.data << " removed");
+            break;
+
+        case MsgType::SINK_INPUT_ADDED:
+            LOG("[EVENT] sink input #" << msg.data << " added");
+            break;
+        case MsgType::SINK_INPUT_CHANGED:
+            LOG("[EVENT] sink input #" << msg.data << " changed");
+            break;
+        case MsgType::SINK_INPUT_REMOVED:
+            LOG("[EVENT] sink input #" << msg.data << " removed");
+            break;
+
+        case MsgType::LIST_SINKS_COMPLETE:
+            LOG("[EVENT] list sinks complete");
+            break;
+        case MsgType::LIST_SINK_INPUTS_COMPLETE:
+            LOG("[EVENT] list sink inputs complete");
+            break;
+        
+        default:
+            break;
         }
         
-        msgQueue->unlock();
     }
     end_while: ;
 
