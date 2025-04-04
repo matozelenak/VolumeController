@@ -7,6 +7,7 @@
 #define COM_BAUD_RATE 115200
 #define COM_CONFIG SERIAL_8E1
 #define COM_READ_TIMEOUT 50
+#define BUFFER_SIZE 100
 
 const int NUM_CHANNELS = 6;
 const int LED_PIN = 6;
@@ -23,9 +24,14 @@ unsigned long nextStadby;
 uint8_t hue;
 bool connected;
 
+char serialBuffer[BUFFER_SIZE];
+int serialBufferPos;
+
 /******** Setup function ********/
 void setup() {
     connected = false;
+    for (int i = 0; i < BUFFER_SIZE; i++) serialBuffer[i] = 0;
+    serialBufferPos = 0;
 
     // Serial setup
     Serial.begin(COM_BAUD_RATE, COM_CONFIG);
@@ -34,6 +40,8 @@ void setup() {
     // LEDs setup
     FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_CHANNELS);
     FastLED.setBrightness(50);
+    for (int i = 0; i < NUM_CHANNELS; i++) leds[i] = CRGB::Black;
+    FastLED.show();
 
     for (int i = 0; i < NUM_CHANNELS; i++) {
         pinMode(button[i].pin, INPUT);
@@ -43,7 +51,6 @@ void setup() {
         potentiometers[i].raw = 0;
     }
 
-    updateLEDs();
     nextStadby = 0;
     hue = 0;
 
@@ -54,9 +61,9 @@ void setup() {
     delay(20);
     for (int i = 0; i < NUM_CHANNELS; i++) leds[i] = CRGB::Black;
     FastLED.show();
+    delay(500);
 
     Serial.println("READY");
-    delay(500);
 }
 
 /******** Loop function ********/
@@ -66,13 +73,22 @@ void loop() {
     readPotentiometers();
 
     // handle Serial I/O
-    if (Serial.available()) {
+    for (; (serialBufferPos < BUFFER_SIZE) && Serial.available(); serialBufferPos++) {
         connected = true;
-        String data = Serial.readStringUntil('\n');
-        data.trim(); // delete '\r' from the end of the string
-        DBGPRINT("[RX]: '" + data + "'");
+        char c = Serial.read();
+        serialBuffer[serialBufferPos] = c;
 
-        parseInput(data);
+        if (serialBufferPos == BUFFER_SIZE-1 || c == '\n') {
+            serialBuffer[serialBufferPos] = '\0';
+            String data(serialBuffer);
+            data.trim(); // delete '\r' from the end of the string
+            DBGPRINT("[RX]: '" + data + "'");
+            
+            parseInput(data);
+
+            serialBufferPos = -1;
+            serialBuffer[0] = '\0';
+        }
     }
 
     // after some time of inactivity, switch to "standby mode"
