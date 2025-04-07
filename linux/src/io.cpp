@@ -229,6 +229,7 @@ void IO::_threadRoutine(void* param) {
                 }
                 else if (bytesRead == 0) {
                     LOG("read() returned 0");
+                    _closeSerialPort();
                 }
                 else {
                     if (c == '\n') {
@@ -236,7 +237,7 @@ void IO::_threadRoutine(void* param) {
                         _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
                         comBufferPosition = 0;
                     }
-                    else {
+                    else if (c > 0 && c != '\r') {
                         comBuffer[comBufferPosition] = c;
                         comBufferPosition++;
                     }
@@ -295,4 +296,15 @@ void IO::_threadRoutine(void* param) {
     }
     unlink(PIPE_PATH);
     _closeSerialPort();
+}
+
+void IO::sendSerial(const char *data) {
+    if (!_isSerialConnected) return;
+    int bytesRemaining = strlen(data);
+    int pointer = 0;
+    do {
+        int bytesWritten = write(_fdSerialPort, data+pointer, bytesRemaining);
+        bytesRemaining -= bytesWritten;
+        pointer += bytesWritten;
+    } while (bytesRemaining > 0);
 }

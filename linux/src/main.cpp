@@ -37,6 +37,11 @@ void* signalThread(void *param) {
     return NULL;
 }
 
+void printSinkInputInfo(int index) {
+        Session &session = mgr->getSessionPool()->operator[](index);
+        LOG("[SINK INPUT] " << session.name << " " << session.volume << " " << session.muted);
+}
+
 int main() {
     LOG("Arduino Volume Controller");
     running = true;
@@ -74,10 +79,21 @@ int main() {
         {
         case MsgType::EXIT:
             goto end_while;
+
+        case MsgType::SERIAL_CONNECTED:
+            break;
+        case MsgType::SERIAL_DISCONNECTED:
+            break;
         case MsgType::SERIAL_DATA:
+            break;
+
+        case MsgType::PIPE_CONNECTED:
+            break;
+        case MsgType::PIPE_DISCONNECTED:
             break;
         case MsgType::PIPE_DATA:
             break;
+
         case MsgType::PA_CONTEXT_READY:
             mgr->listSinks_sync();
             mgr->listSinkInputs_sync();
@@ -97,9 +113,11 @@ int main() {
 
         case MsgType::SINK_INPUT_ADDED:
             LOG("[EVENT] sink input #" << msg.data << " added");
+            printSinkInputInfo(stoi(msg.data));
             break;
         case MsgType::SINK_INPUT_CHANGED:
             LOG("[EVENT] sink input #" << msg.data << " changed");
+            printSinkInputInfo(stoi(msg.data));
             break;
         case MsgType::SINK_INPUT_REMOVED:
             LOG("[EVENT] sink input #" << msg.data << " removed");

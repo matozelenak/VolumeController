@@ -21,6 +21,8 @@ public:
     bool isSerialConnected();
     bool isRunning();
 
+    void sendSerial(const char *data);
+
 private:
     bool _reinitSerialPort();
     bool _closeSerialPort();
