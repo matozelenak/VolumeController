@@ -30,6 +30,9 @@ VolumeManager::~VolumeManager() {
 
 bool VolumeManager::init() {
     _mainloop = pa_threaded_mainloop_new();
+    pa_threaded_mainloop_start(_mainloop);
+    lock();
+    
     _context = pa_context_new(pa_threaded_mainloop_get_api(_mainloop), APPLICATION_NAME);
     pa_context_set_state_callback(
         _context,
@@ -49,8 +52,8 @@ bool VolumeManager::init() {
         this
     );
 
-    pa_threaded_mainloop_start(_mainloop);
     pa_context_connect(_context, nullptr, PA_CONTEXT_NOFLAGS, nullptr);
+    unlock();
     LOG("PulseAudio mainloop started");
     return true;
 }

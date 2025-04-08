@@ -10,6 +10,7 @@
 #include "threaded_queue.h"
 #include "msg.h"
 #include "volume_manager.h"
+#include "utils.h"
 
 using namespace std;
 
