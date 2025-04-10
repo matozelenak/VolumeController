@@ -11,12 +11,14 @@
 #include "msg.h"
 #include "volume_manager.h"
 #include "utils.h"
+#include "controller.h"
 
 using namespace std;
 
 shared_ptr<IO> io;
 shared_ptr<ThreadedQueue<Msg>> msgQueue;
 shared_ptr<VolumeManager> mgr;
+shared_ptr<Controller> controller;
 bool running;
 pthread_t thSignal;
 
@@ -66,6 +68,8 @@ int main() {
         return 0;
     }
     io->reopenSerialPort();
+
+    controller = make_shared<Controller>(io, mgr);
 
     while (true) {
         msgQueue->lock();
@@ -130,6 +134,14 @@ int main() {
             break;
         case MsgType::LIST_SINK_INPUTS_COMPLETE:
             LOG("[EVENT] list sink inputs complete");
+            break;
+
+        case MsgType::DEFAULT_SINK_CHANGED:
+            LOG("[EVENT] default sink changed");
+            controller->defaultSinkChanged();
+            break;
+        case MsgType::DEFAULT_SOURCE_CHANGED:
+            LOG("[EVENT] default source changed");
             break;
         
         default:
