@@ -64,7 +64,7 @@ bool Utils::parseCmdAllValues(string &data, char &cmd, int vals[]) {
     int colonIndex;
     if (!_parseHeader(data, cmd, colonIndex)) return false;
     int last = colonIndex;
-    for (int i = 0; i < 6 /*NUM_CHANNELS */; i++) {
+    for (int i = 0; i < NUM_CHANNELS; i++) {
         int next = data.find('|', last+1);
         if (next == string::npos) return false;
         if (!_parseNumber(data, vals[i], last+1, next-last-1)) return false;
@@ -86,7 +86,7 @@ string Utils::makeCmd1Value(CMDTYPE type, int ch, int val) {
 string Utils::makeCmdAllValues(CMDTYPE type, int vals[]) {
     stringstream ss;
     ss << "!" << _getCmdTypeChar(type) << ":";
-    for (int i = 0; i < 6 /*NUM_CHANNELS*/; i++) {
+    for (int i = 0; i < NUM_CHANNELS; i++) {
         ss << vals[i] << "|";
     }
     ss << "\n";

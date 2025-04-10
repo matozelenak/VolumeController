@@ -324,11 +324,11 @@ void VolumeManager::listSinkInputs_sync() {
     listSinkInputs(true, true);
 }
 
-map<int, Session> *VolumeManager::getSessionPool() {
+SessionPool *VolumeManager::getSessionPool() {
     return &_sessionPool;
 }
 
-map<int, Session> *VolumeManager::getDevicePool() {
+DevicePool *VolumeManager::getDevicePool() {
     return &_devicePool;
 }
 

@@ -26,8 +26,8 @@ void* signalThread(void *param) {
 
     while (1) {
         sigwait(set, &sig);
-        if (sig == SIGINT) {
-            LOG("SIGINT received in signal thread");
+        if (sig == SIGINT || sig == SIGTERM) {
+            LOG(sig << " received in signal thread");
             running = false;
             io->stop();
             msgQueue->pushAndSignal(Msg{MsgType::EXIT, "stopped by SIGINT"});
@@ -51,6 +51,7 @@ int main() {
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     pthread_create(&thSignal, NULL, signalThread, &set);
 

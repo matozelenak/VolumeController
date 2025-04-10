@@ -12,6 +12,7 @@
 
 #define PIPE_PATH "/tmp/VolumeControllerPipe"
 #define APPLICATION_NAME "VolumeController"
+#define NUM_CHANNELS 6
 
 enum class CMDWHAT;
 enum class CMDTYPE;
@@ -20,3 +21,5 @@ class IO;
 template <typename T> class ThreadedQueue;
 class VolumeManager;
 class Utils;
+class Controller;
+class Channel;

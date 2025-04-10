@@ -16,6 +16,8 @@ public:
     bool removeDevice(int index);
     bool removeSession(int index);
     void clear();
+    bool clearSinks();
+    bool clearSinkInputs();
 
     void setVolume(float volume);
     float getVolume();

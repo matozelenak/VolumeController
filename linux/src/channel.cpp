@@ -19,46 +19,46 @@ bool Channel::addDevice(Session &device) {
     _devices[device.index] = device;
     _mgr->setSinkVolume(device.index, _volume);
     _mgr->setSinkMute(device.index, _mute);
-    if (!_active) {
-        _active = true;
-        return true;
-    }
-    return false;
+    if (!_active) _active = true;
+    return _active;
 }
 
 bool Channel::addSession(Session &session) {
     _sessions[session.index] = session;
     _mgr->setSinkInputVolume(session.index, _volume);
     _mgr->setSinkInputMute(session.index, _mute);
-    if (!_active) {
-        _active = true;
-        return true;
-    }
-    return false;
+    if (!_active) _active = true;
+    return _active;
 }
 
 bool Channel::removeDevice(int index) {
     _devices.erase(index);
-    if (_devices.size() + _sessions.size() == 0) {
-        _active = false;
-        return true;
-    }
-    return false;
+    if (_devices.size() + _sessions.size() == 0) _active = false;
+    return _active;
 }
 
 bool Channel::removeSession(int index) {
     _sessions.erase(index);
-    if (_devices.size() + _sessions.size() == 0) {
-        _active = false;
-        return true;
-    }
-    return false;
+    if (_devices.size() + _sessions.size() == 0) _active = false;
+    return _active;
 }
 
 void Channel::clear() {
     _active = false;
     _devices.clear();
     _sessions.clear();
+}
+
+bool Channel::clearSinks() {
+    _devices.clear();
+    if (_sessions.empty()) _active = false;
+    return _active;
+}
+
+bool Channel::clearSinkInputs() {
+    _sessions.clear();
+    if (_devices.empty()) _active = false;
+    return _active;
 }
 
 void Channel::setVolume(float volume) {

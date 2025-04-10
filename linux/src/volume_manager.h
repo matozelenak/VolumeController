@@ -11,6 +11,9 @@
 #include <memory>
 #include <map>
 
+typedef std::map<int, Session> SessionPool;
+typedef std::map<int, Session> DevicePool;
+
 class VolumeManager {
 
 public:
@@ -55,8 +58,8 @@ private:
     pa_threaded_mainloop *_mainloop;
     pa_context *_context;
     bool _isContextConnected;
-    std::map<int, Session> _sessionPool;
-    std::map<int, Session> _devicePool;
+    SessionPool _sessionPool;
+    DevicePool _devicePool;
 
     bool _listSinksInProgress;
     bool _listSinkInputsInProgress;
