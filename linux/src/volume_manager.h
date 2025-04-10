@@ -40,6 +40,7 @@ public:
     
     std::map<int, Session> *getSessionPool();
     std::map<int, Session> *getDevicePool();
+    int getDefaultSinkIndex();
     
 private:
     void _contextCallback(pa_context *c);
@@ -63,4 +64,5 @@ private:
 
     bool _listSinksInProgress;
     bool _listSinkInputsInProgress;
+    int _defaultSinkIndex;
 };

@@ -22,6 +22,7 @@ VolumeManager::VolumeManager(shared_ptr<ThreadedQueue<Msg>> msgQueue)
     _isContextConnected = false;
     _listSinksInProgress = false;
     _listSinkInputsInProgress = false;
+    _defaultSinkIndex = 0;
 }
 
 VolumeManager::~VolumeManager() {
@@ -116,10 +117,10 @@ void VolumeManager::_contextCallback(pa_context *c) {
         {
             pa_operation *op = pa_context_subscribe(
                 _context,
-                (pa_subscription_mask_t) (PA_SUBSCRIPTION_MASK_SINK | PA_SUBSCRIPTION_MASK_SINK_INPUT),
+                (pa_subscription_mask_t) (PA_SUBSCRIPTION_MASK_SINK | PA_SUBSCRIPTION_MASK_SINK_INPUT | PA_SUBSCRIPTION_MASK_SERVER),
                 [](pa_context *c, int success, void *userdata) {
                     if (success) {
-                        LOG("subscribed to sink input events");
+                        LOG("subscribed to events");
                     } else {
                         LOG("failed to subscribe to events");
                     }
@@ -305,6 +306,26 @@ void VolumeManager::_subscribeCallback(pa_context *c, pa_subscription_event_type
             _msgQueue->pushAndSignal(Msg{MsgType::SINK_INPUT_REMOVED, to_string(idx)});
         }
     }
+    else if (facility == PA_SUBSCRIPTION_EVENT_SERVER) {
+
+        if (eventType == PA_SUBSCRIPTION_EVENT_CHANGE) {
+            pa_operation *op = pa_context_get_sink_info_by_name(
+                _context,
+                "@DEFAULT_SINK@",
+                [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
+                    if (eol) return;
+                    VolumeManager *instance = static_cast<VolumeManager*>(userdata);
+                    if (!instance) return;
+                    if (instance->_defaultSinkIndex != i->index) {
+                        instance->_defaultSinkIndex = i->index;
+                        instance->_msgQueue->pushAndSignal(Msg{MsgType::DEFAULT_SINK_CHANGED, to_string(i->index)});
+                    }
+                },
+                this
+            );
+            pa_operation_unref(op);
+        }
+    }
 
 }
 
@@ -330,6 +351,10 @@ SessionPool *VolumeManager::getSessionPool() {
 
 DevicePool *VolumeManager::getDevicePool() {
     return &_devicePool;
+}
+
+int VolumeManager::getDefaultSinkIndex() {
+    return _defaultSinkIndex;
 }
 
 void VolumeManager::setSinkVolume(int index, float volume, bool lck) {

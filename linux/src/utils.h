@@ -16,16 +16,16 @@ class Utils {
 public:
     static std::vector<std::string> getSerialPorts();
 
-    CMDWHAT getWhat(std::string &data);
-    CMDTYPE getType(std::string &data);
-    bool parseCmd1Value(std::string &data, char &cmd, int &ch, int &val);
-    bool parseCmdAllValues(std::string &data, char &cmd, int vals[]);
-    std::string makeRequest(CMDTYPE type);
-    std::string makeCmd1Value(CMDTYPE type, int ch, int val);
-    std::string makeCmdAllValues(CMDTYPE type, int vals[]);
+    static CMDWHAT getWhat(std::string &data);
+    static CMDTYPE getType(std::string &data);
+    static bool parseCmd1Value(std::string &data, char &cmd, int &ch, int &val);
+    static bool parseCmdAllValues(std::string &data, char &cmd, int vals[]);
+    static std::string makeRequest(CMDTYPE type);
+    static std::string makeCmd1Value(CMDTYPE type, int ch, int val);
+    static std::string makeCmdAllValues(CMDTYPE type, int vals[]);
 
 private:
-    char _getCmdTypeChar(CMDTYPE type);
-    bool _parseNumber(std::string &data, int &i, int start, size_t count);
-    bool _parseHeader(std::string &data, char &cmd, int &colonIndex);
+    static char _getCmdTypeChar(CMDTYPE type);
+    static bool _parseNumber(std::string &data, int &i, int start, size_t count);
+    static bool _parseHeader(std::string &data, char &cmd, int &colonIndex);
 };
