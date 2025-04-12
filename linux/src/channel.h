@@ -23,6 +23,7 @@ public:
     float getVolume();
     void setMute(bool mute);
     bool getMute();
+    bool isActive();
 
 private:
     std::shared_ptr<VolumeManager> _mgr;

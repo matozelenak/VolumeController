@@ -23,6 +23,7 @@ VolumeManager::VolumeManager(shared_ptr<ThreadedQueue<Msg>> msgQueue)
     _listSinksInProgress = false;
     _listSinkInputsInProgress = false;
     _defaultSinkIndex = 0;
+    _getDefSinkIdxInProgress = false;
 }
 
 VolumeManager::~VolumeManager() {
@@ -309,21 +310,7 @@ void VolumeManager::_subscribeCallback(pa_context *c, pa_subscription_event_type
     else if (facility == PA_SUBSCRIPTION_EVENT_SERVER) {
 
         if (eventType == PA_SUBSCRIPTION_EVENT_CHANGE) {
-            pa_operation *op = pa_context_get_sink_info_by_name(
-                _context,
-                "@DEFAULT_SINK@",
-                [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
-                    if (eol) return;
-                    VolumeManager *instance = static_cast<VolumeManager*>(userdata);
-                    if (!instance) return;
-                    if (instance->_defaultSinkIndex != i->index) {
-                        instance->_defaultSinkIndex = i->index;
-                        instance->_msgQueue->pushAndSignal(Msg{MsgType::DEFAULT_SINK_CHANGED, to_string(i->index)});
-                    }
-                },
-                this
-            );
-            pa_operation_unref(op);
+            getDefSinkIdx(false);
         }
     }
 
@@ -397,4 +384,30 @@ void VolumeManager::setSinkInputMute(int index, bool mute, bool lck) {
         pa_operation_unref(op);
     }
     if (lck) unlock();
+}
+
+void VolumeManager::getDefSinkIdx(bool lck) {
+    _getDefSinkIdxInProgress = true;
+    if(lck) lock();
+    pa_operation *op = pa_context_get_sink_info_by_name(
+        _context,
+        "@DEFAULT_SINK@",
+        [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
+            if (eol) return;
+            VolumeManager *instance = static_cast<VolumeManager*>(userdata);
+            if (!instance) return;
+            if (instance->_defaultSinkIndex != i->index) {
+                bool sendMsg = true;
+                if (instance->_defaultSinkIndex == 0) sendMsg = false;
+                instance->_defaultSinkIndex = i->index;
+                if (sendMsg) instance->_msgQueue->pushAndSignal(Msg{MsgType::DEFAULT_SINK_CHANGED, to_string(i->index)});
+            }
+            instance->_getDefSinkIdxInProgress = false;
+            pa_threaded_mainloop_signal(instance->_mainloop, 0);
+        },
+        this
+    );
+    pa_operation_unref(op);
+    if(lck) while (_getDefSinkIdxInProgress) pa_threaded_mainloop_wait(_mainloop);
+    if(lck) unlock();
 }

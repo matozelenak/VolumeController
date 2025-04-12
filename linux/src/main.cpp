@@ -101,25 +101,28 @@ int main() {
             break;
 
         case MsgType::PA_CONTEXT_READY:
-            mgr->listSinks_sync();
-            mgr->listSinkInputs_sync();
+            mgr->getDefSinkIdx();
+            controller->remapChannels();
             break;
         case MsgType::PA_CONTEXT_DISCONNECTED:
             break;
 
         case MsgType::SINK_ADDED:
             LOG("[EVENT] sink #" << msg.data << " added");
+            controller->addDevice(stoi(msg.data));
             break;
         case MsgType::SINK_CHANGED:
             LOG("[EVENT] sink #" << msg.data << " changed");
             break;
         case MsgType::SINK_REMOVED:
             LOG("[EVENT] sink #" << msg.data << " removed");
+            controller->removeDevice(stoi(msg.data));
             break;
 
         case MsgType::SINK_INPUT_ADDED:
             LOG("[EVENT] sink input #" << msg.data << " added");
             printSinkInputInfo(stoi(msg.data));
+            controller->addSession(stoi(msg.data));
             break;
         case MsgType::SINK_INPUT_CHANGED:
             LOG("[EVENT] sink input #" << msg.data << " changed");
@@ -127,6 +130,7 @@ int main() {
             break;
         case MsgType::SINK_INPUT_REMOVED:
             LOG("[EVENT] sink input #" << msg.data << " removed");
+            controller->removeSession(stoi(msg.data));
             break;
 
         case MsgType::LIST_SINKS_COMPLETE:

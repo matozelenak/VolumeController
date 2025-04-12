@@ -41,6 +41,7 @@ public:
     std::map<int, Session> *getSessionPool();
     std::map<int, Session> *getDevicePool();
     int getDefaultSinkIndex();
+    void getDefSinkIdx(bool lck = true);
     
 private:
     void _contextCallback(pa_context *c);
@@ -55,6 +56,7 @@ private:
 
     void _subscribeCallback(pa_context *c, pa_subscription_event_type_t t, uint32_t idx);
     
+
     std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;
     pa_threaded_mainloop *_mainloop;
     pa_context *_context;
@@ -65,4 +67,5 @@ private:
     bool _listSinksInProgress;
     bool _listSinkInputsInProgress;
     int _defaultSinkIndex;
+    bool _getDefSinkIdxInProgress;
 };

@@ -84,3 +84,7 @@ void Channel::setMute(bool mute) {
 bool Channel::getMute() {
     return _mute;
 }
+
+bool Channel::isActive() {
+    return _active;
+}
