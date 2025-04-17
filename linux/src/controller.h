@@ -23,6 +23,7 @@ public:
     void removeDevice(int index);
     void removeSession(int index);
 
+    void parseData(std::string &data);
     void updateController();
     void sendActiveData();
     void sendMuteData();

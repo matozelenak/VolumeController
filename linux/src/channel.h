@@ -32,4 +32,5 @@ private:
     bool _active;
     float _volume;
     bool _mute;
+    bool _isInitial;
 };

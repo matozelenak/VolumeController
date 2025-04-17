@@ -9,6 +9,7 @@ Channel::Channel(shared_ptr<VolumeManager> mgr)
     _active = false;
     _volume = 0;
     _mute = false;
+    _isInitial = true;
 }
 
 Channel::~Channel() {
@@ -17,16 +18,28 @@ Channel::~Channel() {
 
 bool Channel::addDevice(Session &device) {
     _devices[device.index] = device;
-    _mgr->setSinkVolume(device.index, _volume);
-    _mgr->setSinkMute(device.index, _mute);
+    if (_isInitial) {
+        _isInitial = false;
+        _volume = device.volume;
+        _mute = device.muted;
+    } else {
+        _mgr->setSinkVolume(device.index, _volume);
+        _mgr->setSinkMute(device.index, _mute);
+    }
     if (!_active) _active = true;
     return _active;
 }
 
 bool Channel::addSession(Session &session) {
     _sessions[session.index] = session;
-    _mgr->setSinkInputVolume(session.index, _volume);
-    _mgr->setSinkInputMute(session.index, _mute);
+    if (_isInitial) {
+        _isInitial = false;
+        _volume = session.volume;
+        _mute = session.muted;
+    } else {
+        _mgr->setSinkInputVolume(session.index, _volume);
+        _mgr->setSinkInputMute(session.index, _mute);
+    }
     if (!_active) _active = true;
     return _active;
 }

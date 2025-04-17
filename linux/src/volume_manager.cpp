@@ -380,7 +380,7 @@ void VolumeManager::setSinkInputVolume(int index, float volume, bool lck) {
 void VolumeManager::setSinkInputMute(int index, bool mute, bool lck) {
     if (lck) lock();
     if (_sessionPool.count(index)) {
-        pa_operation *op = pa_context_set_sink_mute_by_index(_context, index, mute ? 1 : 0, NULL, NULL);
+        pa_operation *op = pa_context_set_sink_input_mute(_context, index, mute ? 1 : 0, NULL, NULL);  
         pa_operation_unref(op);
     }
     if (lck) unlock();

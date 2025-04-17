@@ -91,6 +91,7 @@ int main() {
         case MsgType::SERIAL_DISCONNECTED:
             break;
         case MsgType::SERIAL_DATA:
+            controller->parseData(msg.data);
             break;
 
         case MsgType::PIPE_CONNECTED:

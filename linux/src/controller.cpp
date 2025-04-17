@@ -135,6 +135,62 @@ void Controller::removeSession(int index) {
     }
 }
 
+void Controller::parseData(string &data) {
+    if (data == "READY") {
+        updateController();
+        return;
+    }
+    CMDWHAT what = Utils::getWhat(data);
+    CMDTYPE type = Utils::getType(data);
+    
+    if (what == CMDWHAT::COMMAND) {
+        switch (type)
+        {
+        case CMDTYPE::MUTE:
+            if (data[2] != ':') { // TODO temporary
+                char cmd;
+                int ch;
+                int val;
+                if (!Utils::parseCmd1Value(data, cmd, ch, val)) break;
+                _channels[ch].setMute(val);
+                LOG("cmd: " << cmd << " ch " << ch << " val " << val);
+            }
+            break;
+        case CMDTYPE::VOLUME:
+            if (data[2] != ':') { // TODO temporary
+                char cmd;
+                int ch;
+                int val;
+                if (!Utils::parseCmd1Value(data, cmd, ch, val)) break;
+                _channels[ch].setVolume(val/100.0);
+                LOG("cmd: " << cmd << " ch " << ch << " val " << val);
+            }
+            else {
+                char cmd;
+                int vals[NUM_CHANNELS];
+                if (!Utils::parseCmdAllValues(data, cmd, vals)) break;
+                for (int i = 0; i < NUM_CHANNELS; i++) _channels[i].setVolume(vals[i]/100.0);
+            }
+            break;
+        
+        default:
+            break;
+        }
+    } else if (what == CMDWHAT::REQUEST) {
+        switch (type)
+        {
+        case CMDTYPE::ACTIVE_CH:
+            sendActiveData();
+            break;
+        case CMDTYPE::MUTE:
+            sendMuteData();
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 void Controller::updateController() {
     sendActiveData();
     sendMuteData();

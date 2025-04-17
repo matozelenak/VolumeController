@@ -46,7 +46,7 @@ CMDTYPE Utils::getType(string &data) {
 }
 
 bool Utils::parseCmd1Value(string &data, char &cmd, int &ch, int &val) {
-    if (data.length() < 6) return false;
+    if (data.length() < 5) return false;
     int colonIndex;
     if (!_parseHeader(data, cmd, colonIndex)) return false;
     int _ch;
