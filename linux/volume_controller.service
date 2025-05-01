@@ -1,0 +1,14 @@
+[Unit]
+Description=Arduino Volume Controller
+Wants=pipewire-pulse.service pulseaudio.service
+
+[Service]
+Type=simple
+ExecStart=%h/.bin/vc/volume_controller %h/.bin/vc/config.json
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=no
+StandardOutput=append:/tmp/volume_controller.log
+StandardError=append:/tmp/volume_controller_error.log
+
+[Install]
+WantedBy=default.target

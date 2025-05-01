@@ -26,7 +26,7 @@ shared_ptr<Controller> controller;
 bool running;
 pthread_t thSignal;
 
-const string CONFIG_PATH = "config.json";
+string CONFIG_PATH = "config.json";
 Config cfg;
 
 json storeConfigToJSON(Config &cfg) {
@@ -131,9 +131,12 @@ void printSinkInputInfo(int index) {
         LOG("[SINK INPUT] " << session.name << " " << session.volume << " " << session.muted);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     LOG("Arduino Volume Controller");
     running = true;
+    if (argc >= 2) {
+        CONFIG_PATH = argv[1];
+    }
 
     // block SIGINT in current thread, new threads should inherit the changes
     sigset_t set;
@@ -144,6 +147,7 @@ int main() {
     pthread_create(&thSignal, NULL, signalThread, &set);
 
     readConfig(cfg);
+    writeConfig(cfg);
 
     msgQueue = make_shared<ThreadedQueue<Msg>>();
     io = make_shared<IO>(msgQueue, cfg);
@@ -247,6 +251,7 @@ int main() {
     io->wait();
     mgr->wait();
     pthread_join(thSignal, NULL);
+    LOG("\n\n")
 
     return 0;
 }
