@@ -1,6 +1,7 @@
 #include "io.h"
 #include "threaded_queue.h"
 #include "msg.h"
+#include "config.h"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -18,7 +19,7 @@
 #include <cerrno>
 #include <cstring>
 
-IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue)
+IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
     :_msgQueue(msgQueue) {
     _fdSerialPort = -1;
     _isSerialConnected = false;
@@ -28,6 +29,10 @@ IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue)
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, PIPE_PATH, sizeof(addr.sun_path)-1);
+
+    _serialPortName = cfg.port;
+    _baudRate = cfg.baud;
+    _parity = cfg.parity;
 }
 
 IO::~IO() {
@@ -35,10 +40,6 @@ IO::~IO() {
 }
 
 bool IO::init() {
-    // temporary
-    _serialPortName = "/dev/ttyUSB0";
-    _baudRate = 115200;
-
     _running = true;
     _reinitSerial = false;
 
@@ -165,11 +166,25 @@ bool IO::_setSerialParams() {
     tty.c_cflag &= ~CSTOPB;  // 1 stop bit
     tty.c_cflag &= ~CSIZE;   // clear data size bits
     tty.c_cflag |= CS8;      // 8 data bits
-    tty.c_cflag |= PARENB;   // enable parity
-    tty.c_cflag &= ~PARODD;  // set even parity
     tty.c_cflag &= ~CRTSCTS; // disable hardware flow control
     tty.c_cflag |= CREAD;    // enable receiver
     tty.c_cflag &= ~CLOCAL;  // allow modem control lines
+
+    switch (_parity)
+    {
+    case Config::Parity::EVEN:
+        tty.c_cflag |= PARENB;
+        tty.c_cflag &= ~PARODD;
+        break;
+    case Config::Parity::ODD:
+        tty.c_cflag |= PARENB;
+        tty.c_cflag |= PARODD;
+        break;
+    default:
+        tty.c_cflag &= ~PARENB;
+        tty.c_cflag &= ~PARODD;
+        break;
+    }
 
     tty.c_cc[VMIN] = 1;  // must read at least 1 byte
     tty.c_cc[VTIME] = 0; // timeout
@@ -307,4 +322,24 @@ void IO::sendSerial(const char *data) {
         bytesRemaining -= bytesWritten;
         pointer += bytesWritten;
     } while (bytesRemaining > 0);
+}
+
+void IO::configChanged(Config &cfg) {
+    bool change = false;
+    if (_serialPortName != cfg.port) {
+        _serialPortName = cfg.port;
+        change = true;
+    }
+    if (_baudRate != cfg.baud) {
+        _baudRate = cfg.baud;
+        change = true;
+    }
+    if (_parity != cfg.parity) {
+        _parity = cfg.parity;
+        change = true;
+    }
+    if (change) {
+        LOG("[IO] config changed");
+        reopenSerialPort();
+    }   
 }

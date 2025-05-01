@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <fstream>
+#include "nlohmann/json.hpp"
 
 #include "io.h"
 #include "threaded_queue.h"
@@ -12,8 +14,10 @@
 #include "volume_manager.h"
 #include "utils.h"
 #include "controller.h"
+#include "config.h"
 
 using namespace std;
+using json=nlohmann::json;
 
 shared_ptr<IO> io;
 shared_ptr<ThreadedQueue<Msg>> msgQueue;
@@ -21,6 +25,88 @@ shared_ptr<VolumeManager> mgr;
 shared_ptr<Controller> controller;
 bool running;
 pthread_t thSignal;
+
+const string CONFIG_PATH = "config.json";
+Config cfg;
+
+json storeConfigToJSON(Config &cfg) {
+    json doc;
+    doc["port"] = cfg.port;
+    doc["baud"] = cfg.baud;
+    switch (cfg.parity)
+    {
+    case Config::Parity::EVEN:
+        doc["parity"] = "EVEN";
+        break;
+    case Config::Parity::ODD:
+        doc["parity"] = "ODD";
+        break;
+    default:
+        doc["parity"] = "NONE";
+        break;
+    }
+    doc["channels"] = json::array();
+    for (int i = 0; i < cfg.channels.size(); i++) {
+        json ch;
+        ch["id"] = i;
+        ch["sessions"] = json::array();
+        for (string &session : cfg.channels[i]) {
+            ch["sessions"].push_back(session);
+        }
+        doc["channels"].push_back(ch);
+    }
+    return doc;
+}
+
+void writeConfig(Config &cfg) {
+    LOG("writing config: " << CONFIG_PATH);
+    json data = storeConfigToJSON(cfg);
+    ofstream out(CONFIG_PATH);
+    out << data.dump(2);
+    out.close();
+}
+
+void parseConfigFromJSON(json &doc, Config &cfg) {
+    if (doc.contains("port")) {
+        cfg.port = doc["port"];
+    }
+    if (doc.contains("baud")) {
+        cfg.baud = doc["baud"];
+    }
+    if (doc.contains("parity")) {
+        string p = doc["parity"];
+        if (p == "NONE") cfg.parity = Config::Parity::NONE;
+        else if (p == "EVEN") cfg.parity = Config::Parity::EVEN;
+        else if (p == "ODD") cfg.parity = Config::Parity::ODD;
+    }
+    if (doc.contains("channels")) {
+        json &channels = doc["channels"];
+        cfg.channels.clear();
+        cfg.channels.resize(NUM_CHANNELS);
+        for (json &channel : channels) {
+            int id = channel["id"];
+            if (id < 0 || id >= NUM_CHANNELS) continue;
+            json sessions = channel["sessions"];
+            for (string session : sessions) {
+                cfg.channels[id].push_back(session);
+            }
+        }
+    }
+}
+
+void readConfig(Config &cfg) {
+    LOG("reading config: " << CONFIG_PATH);
+    ifstream in(CONFIG_PATH);
+    json raw;
+    try{
+        raw = json::parse(in);
+    } catch(json::parse_error& e) {
+        ERR(e.what());
+        return;
+    }
+    cfg.channels.resize(NUM_CHANNELS);
+    parseConfigFromJSON(raw, cfg);
+}
 
 void* signalThread(void *param) {
     int sig;
@@ -57,8 +143,10 @@ int main() {
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     pthread_create(&thSignal, NULL, signalThread, &set);
 
+    readConfig(cfg);
+
     msgQueue = make_shared<ThreadedQueue<Msg>>();
-    io = make_shared<IO>(msgQueue);
+    io = make_shared<IO>(msgQueue, cfg);
     mgr = make_shared<VolumeManager>(msgQueue);
 
     mgr->init();
@@ -69,7 +157,7 @@ int main() {
     }
     io->reopenSerialPort();
 
-    controller = make_shared<Controller>(io, mgr);
+    controller = make_shared<Controller>(io, mgr, cfg);
 
     while (true) {
         msgQueue->lock();

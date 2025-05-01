@@ -13,7 +13,7 @@
 
 class Controller {
 public:
-    Controller(std::shared_ptr<IO> io, std::shared_ptr<VolumeManager> mgr);
+    Controller(std::shared_ptr<IO> io, std::shared_ptr<VolumeManager> mgr, Config &cfg);
     ~Controller();
 
     void remapChannels();
@@ -28,6 +28,8 @@ public:
     void sendActiveData();
     void sendMuteData();
     void requestVolumeData();
+
+    void configChanged(Config &cfg);
 
 private:
     std::shared_ptr<IO> _io;

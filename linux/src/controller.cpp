@@ -12,13 +12,13 @@
 #include <set>
 using namespace std;
 
-Controller::Controller(shared_ptr<IO> io, shared_ptr<VolumeManager> mgr)
+Controller::Controller(shared_ptr<IO> io, shared_ptr<VolumeManager> mgr, Config &cfg)
     : _io(io), _mgr(mgr) {
     _channels.resize(NUM_CHANNELS, Channel(_mgr));
     _chOther = -1;
 
-    // TODO temporary until config is implemented
-    _channelMap = {{"master"}, {"other"}, {"Discord"}, {"Firefox"}, {"javaw"}, {"Vlc"}};
+    _channelMap = cfg.channels;
+    // _channelMap = {{"master"}, {"other"}, {"Discord"}, {"Firefox"}, {"javaw"}, {"Vlc"}};
 }
 
 Controller::~Controller() {
@@ -38,7 +38,7 @@ void Controller::remapChannels() {
     DevicePool *devicePool = _mgr->getDevicePool();
     SessionPool *sessionPool = _mgr->getSessionPool();
     
-    for (int i = 0; i < NUM_CHANNELS; i++) {
+    for (int i = 0; i < _channelMap.size(); i++) {
         vector<string> &channelApps = _channelMap[i];
         for (string &app : channelApps) {
             if (app == "other") {
@@ -68,7 +68,7 @@ void Controller::defaultSinkChanged() {
 
 void Controller::addDevice(int index, bool update) {
     Session &device = _mgr->getDevicePool()->operator[](index);
-    for (int i = 0; i < NUM_CHANNELS; i++) {
+    for (int i = 0; i < _channelMap.size(); i++) {
         vector<string> &channelApps = _channelMap[i];
         Channel &channel = _channels[i];
 
@@ -89,7 +89,7 @@ void Controller::addDevice(int index, bool update) {
 
 void Controller::addSession(int index, bool update) {
     Session &session = _mgr->getSessionPool()->operator[](index);
-    for (int i = 0; i < NUM_CHANNELS; i++) {
+    for (int i = 0; i < _channelMap.size(); i++) {
         vector<string> &channelApps = _channelMap[i];
         Channel &channel = _channels[i];
 
@@ -213,4 +213,9 @@ void Controller::sendMuteData() {
 
 void Controller::requestVolumeData() {
     _io->sendSerial(Utils::makeRequest(CMDTYPE::VOLUME).c_str());
+}
+
+void Controller::configChanged(Config &cfg) {
+    _channelMap = cfg.channels;
+    remapChannels();
 }

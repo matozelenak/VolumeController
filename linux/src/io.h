@@ -2,6 +2,7 @@
 #include "globals.h"
 #include "threaded_queue.h"
 #include "msg.h"
+#include "config.h"
 
 #include <sys/un.h>
 #include <pthread.h>
@@ -11,7 +12,7 @@
 class IO {
 
 public:
-    IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue);
+    IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg);
     ~IO();
     bool init(); // TODO config struct
     
@@ -22,6 +23,7 @@ public:
     bool isRunning();
 
     void sendSerial(const char *data);
+    void configChanged(Config &cfg);
 
 private:
     bool _reinitSerialPort();
@@ -33,6 +35,7 @@ private:
 
     int _fdSerialPort;
     int _baudRate;
+    Config::Parity _parity;
     std::string _serialPortName;
     bool _running;
     bool _isSerialConnected;
