@@ -10,7 +10,7 @@ DEPENDS := $(patsubst $(SRC_DIR)/%.cpp,$(OUT_DIR)/%.d,$(SOURCES))
 all: volume_controller
 
 volume_controller: $(OBJECTS)
-	g++ $^ -o $(OUT_DIR)/$@ -lpulse -lpthread
+	g++ $^ -o $(OUT_DIR)/$@ -lpulse -lpthread -ludev
 
 
 $(OUT_DIR)/%.o: $(SRC_DIR)/%.cpp makefile

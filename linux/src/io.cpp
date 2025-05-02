@@ -18,8 +18,11 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <libudev.h>
 
-IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
+using namespace std;
+
+IO::IO(shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
     :_msgQueue(msgQueue) {
     _fdSerialPort = -1;
     _isSerialConnected = false;
@@ -33,10 +36,17 @@ IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
     _serialPortName = cfg.port;
     _baudRate = cfg.baud;
     _parity = cfg.parity;
+
+    _udev = udev_new();
+    _udev_monitor = udev_monitor_new_from_netlink(_udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(_udev_monitor, "tty", NULL);
+    udev_monitor_enable_receiving(_udev_monitor);
 }
 
 IO::~IO() {
     _closeSerialPort();
+    udev_monitor_unref(_udev_monitor);
+    udev_unref(_udev);
 }
 
 bool IO::init() {
@@ -209,7 +219,7 @@ bool IO::_setSerialParams() {
 void IO::_threadRoutine(void* param) {
     LOG("IO thread started");
 
-    // serialPort, serverSocket, guiClientSocket, cliClientSocket (maybe)
+    // serialPort, serverSocket, guiClientSocket, udev
     const int POLL_FDSIZE = 4;
     pollfd fds[POLL_FDSIZE];
     for (int i = 0; i < POLL_FDSIZE; i++) {
@@ -218,6 +228,8 @@ void IO::_threadRoutine(void* param) {
     }
     fds[1].fd = _fdSocket;
     fds[1].events = POLLIN;
+    fds[3].fd = udev_monitor_get_fd(_udev_monitor);
+    fds[3].events = POLLIN;
     char comBuffer[1024];
     int comBufferPosition = 0;
     while (_running) {
@@ -249,7 +261,7 @@ void IO::_threadRoutine(void* param) {
                 else {
                     if (c == '\n') {
                         comBuffer[comBufferPosition] = '\0';
-                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
+                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, string(comBuffer)});
                         comBufferPosition = 0;
                     }
                     else if (c > 0 && c != '\r') {
@@ -260,7 +272,7 @@ void IO::_threadRoutine(void* param) {
                     if (comBufferPosition == sizeof(comBuffer)-1) {
                         // the buffer is full, output it
                         comBuffer[comBufferPosition] = '\0';
-                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
+                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, string(comBuffer)});
                         comBufferPosition = 0;
                     }
                 }
@@ -296,8 +308,22 @@ void IO::_threadRoutine(void* param) {
                 }
                 else {
                     buffer[bytesRead] = '\0';
-                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DATA, std::string(buffer)});
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DATA, string(buffer)});
                 }
+            }
+
+            // udev
+            if (fds[3].revents & POLLIN) {
+                udev_device *dev = udev_monitor_receive_device(_udev_monitor);
+                if (dev) {
+                    string action = udev_device_get_action(dev);
+                    string devnode = udev_device_get_devnode(dev);
+                    if (action == "add" && devnode == _serialPortName) {
+                        LOG("device " << _serialPortName << " connected");
+                        reopenSerialPort();
+                    }
+                }
+                udev_device_unref(dev);
             }
         }
     } // end while running

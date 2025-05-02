@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <string>
 #include <memory>
+#include <libudev.h>
 
 class IO {
 
@@ -45,4 +46,7 @@ private:
 
     pthread_t _thread;
     std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;
+
+    udev *_udev;
+    udev_monitor *_udev_monitor;
 };
