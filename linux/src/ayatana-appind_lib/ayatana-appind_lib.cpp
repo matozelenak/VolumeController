@@ -33,7 +33,8 @@ void libraryInit(int argc, char *argv[], string appName, string icon) {
 }
 
 void setIcon(std::string icon) {
-    app_indicator_set_icon(appind::_indicator, appind::_icon.c_str());
+    appind::_icon = icon;
+    app_indicator_set_icon(appind::_indicator, icon.c_str());
 }
 
 void addMenuItem(std::string label) {

@@ -259,8 +259,10 @@ int main(int argc, char *argv[]) {
             goto end_while;
 
         case MsgType::SERIAL_CONNECTED:
+            ind_setIcon(ICON2_PATH);
             break;
         case MsgType::SERIAL_DISCONNECTED:
+            ind_setIcon(ICON1_PATH);
             break;
         case MsgType::SERIAL_DATA:
             controller->parseData(msg.data);
