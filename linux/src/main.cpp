@@ -324,7 +324,7 @@ int main(int argc, char *argv[]) {
             break;
 
         case MsgType::CLICK_OPENGUI:
-            // TODO
+            system("volumecontroller-gui-linux-x64/volumecontroller-gui --no-sandbox &");
             break;
         case MsgType::CLICK_RESCAN:
             controller->remapChannels();
