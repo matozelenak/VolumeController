@@ -5,15 +5,18 @@
 #include "session.h"
 #include "utils.h"
 #include "channel.h"
+#include "threaded_queue.h"
+#include "msg.h"
 
 #include <vector>
 #include <string>
 #include <map>
 #include <memory>
+#include "nlohmann/json.hpp"
 
 class Controller {
 public:
-    Controller(std::shared_ptr<IO> io, std::shared_ptr<VolumeManager> mgr, Config &cfg);
+    Controller(std::shared_ptr<IO> io, std::shared_ptr<VolumeManager> mgr, Config &cfg, std::shared_ptr<ThreadedQueue<Msg>> msgQueue);
     ~Controller();
 
     void remapChannels();
@@ -31,11 +34,16 @@ public:
 
     void configChanged(Config &cfg);
 
+    void handlePipeData(std::string &str);
+    void makeStatusJSON(nlohmann::json &response);
+
 private:
     std::shared_ptr<IO> _io;
     std::shared_ptr<VolumeManager> _mgr;
+    std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;
     std::vector<Channel> _channels;
     std::vector<bool> _channelActive;
+    Config *_cfg;
 
     int _chOther;
     std::vector<std::vector<std::string>> _channelMap;

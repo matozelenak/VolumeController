@@ -9,6 +9,7 @@ struct Config {
 
     std::string port = "";
     int baud = 115200;
-    Parity parity = Parity::NONE;
+    Parity parity = Parity::EVEN;
     std::vector<std::vector<std::string>> channels;
+    std::string CONFIG_PATH;
 };

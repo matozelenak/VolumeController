@@ -1,5 +1,7 @@
 #pragma once
 #include "globals.h"
+#include "config.h"
+#include "nlohmann/json.hpp"
 
 #include <vector>
 #include <string>
@@ -23,6 +25,11 @@ public:
     static std::string makeRequest(CMDTYPE type);
     static std::string makeCmd1Value(CMDTYPE type, int ch, int val);
     static std::string makeCmdAllValues(CMDTYPE type, int vals[]);
+
+    static nlohmann::json storeConfigToJSON(Config &cfg);
+    static void writeConfig(Config &cfg);
+    static void parseConfigFromJSON(nlohmann::json &doc, Config &cfg);
+    static void readConfig(Config &cfg);
 
 private:
     static char _getCmdTypeChar(CMDTYPE type);

@@ -27,6 +27,8 @@ IO::IO(shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
     _fdSerialPort = -1;
     _isSerialConnected = false;
     _running = false;
+    _isPipeConnected = false;
+    _fdGUIClient = -1;
 
     _fdSocket = -1;
     memset(&addr, 0, sizeof(addr));
@@ -226,7 +228,6 @@ void IO::_threadRoutine(void* param) {
         fds[i].fd = -1;
         fds[i].events = POLLIN;
     }
-    fds[1].fd = _fdSocket;
     fds[1].events = POLLIN;
     fds[3].fd = udev_monitor_get_fd(_udev_monitor);
     fds[3].events = POLLIN;
@@ -240,6 +241,9 @@ void IO::_threadRoutine(void* param) {
 
         if (_isSerialConnected) fds[0].fd = _fdSerialPort;
         else fds[0].fd = -1;
+
+        if (!_isPipeConnected) fds[1].fd = _fdSocket;
+        else fds[1].fd = -1;
 
         int numFDs = poll(fds, POLL_FDSIZE, 1000);
         if (numFDs == -1) {
@@ -286,6 +290,8 @@ void IO::_threadRoutine(void* param) {
                 } else {
                     fds[2].fd = clientFd;
                     LOG("client accepted, fd: " << clientFd);
+                    _isPipeConnected = true;
+                    _fdGUIClient = clientFd;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_CONNECTED, ""});
                 }
             }
@@ -298,12 +304,16 @@ void IO::_threadRoutine(void* param) {
                     ERR("socket read()");
                     close(fds[2].fd);
                     fds[2].fd = -1;
+                    _isPipeConnected = false;
+                    _fdGUIClient = -1;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else if (bytesRead == 0) {
                     LOG("socket read() returned 0");
                     close(fds[2].fd);
                     fds[2].fd = -1;
+                    _isPipeConnected = false;
+                    _fdGUIClient = -1;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else {
@@ -345,6 +355,10 @@ void IO::sendSerial(const char *data) {
     int pointer = 0;
     do {
         int bytesWritten = write(_fdSerialPort, data+pointer, bytesRemaining);
+        if (bytesWritten == -1) {
+            ERR("write() serial");
+            break;
+        }
         bytesRemaining -= bytesWritten;
         pointer += bytesWritten;
     } while (bytesRemaining > 0);
@@ -368,4 +382,19 @@ void IO::configChanged(Config &cfg) {
         LOG("[IO] config changed");
         reopenSerialPort();
     }   
+}
+
+void IO::sendPipe(const char *data) {
+    if (!_isPipeConnected) return;
+    int bytesRemaining = strlen(data);
+    int pointer = 0;
+    do {
+        int bytesWritten = write(_fdGUIClient, data+pointer, bytesRemaining);
+        if (bytesWritten == -1) {
+            ERR("write() pipe");
+            break;
+        }
+        bytesRemaining -= bytesWritten;
+        pointer += bytesWritten;
+    } while (bytesRemaining > 0);
 }

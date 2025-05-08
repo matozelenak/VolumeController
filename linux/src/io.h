@@ -25,6 +25,7 @@ public:
 
     void sendSerial(const char *data);
     void configChanged(Config &cfg);
+    void sendPipe(const char *data);
 
 private:
     bool _reinitSerialPort();
@@ -43,6 +44,8 @@ private:
     bool _reinitSerial;
     int _fdSocket;
     sockaddr_un addr;
+    bool _isPipeConnected;
+    int _fdGUIClient;
 
     pthread_t _thread;
     std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;

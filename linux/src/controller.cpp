@@ -3,6 +3,8 @@
 #include "volume_manager.h"
 #include "session.h"
 #include "utils.h"
+#include "threaded_queue.h"
+#include "msg.h"
 
 #include <vector>
 #include <string>
@@ -10,10 +12,12 @@
 #include <memory>
 #include <iostream>
 #include <set>
+#include "nlohmann/json.hpp"
 using namespace std;
+using json = nlohmann::json;
 
-Controller::Controller(shared_ptr<IO> io, shared_ptr<VolumeManager> mgr, Config &cfg)
-    : _io(io), _mgr(mgr) {
+Controller::Controller(shared_ptr<IO> io, shared_ptr<VolumeManager> mgr, Config &cfg, std::shared_ptr<ThreadedQueue<Msg>> msgQueue)
+    : _io(io), _mgr(mgr), _cfg(&cfg), _msgQueue(msgQueue) {
     _channels.resize(NUM_CHANNELS, Channel(_mgr));
     _chOther = -1;
 
@@ -218,4 +222,57 @@ void Controller::requestVolumeData() {
 void Controller::configChanged(Config &cfg) {
     _channelMap = cfg.channels;
     remapChannels();
+}
+
+void Controller::handlePipeData(string &str) {
+    json data;
+    try {
+        data = json::parse(str);
+    } catch (json::parse_error &e) {
+        LOG(e.what());
+        return;
+    }
+    json response = json();
+    if (data.contains("request")) {
+        for (string type : data["request"]) {
+            if (type == "status") {
+                makeStatusJSON(response);
+            }
+            else if (type == "config") {
+                response["configFile"] = Utils::storeConfigToJSON(*_cfg);
+            }
+            else if (type == "devicePool") {
+                DevicePool *devicePool = _mgr->getDevicePool();
+                response["devicePool"] = json::array();
+                for (auto &entry : *devicePool) {
+                    response["devicePool"].push_back(entry.second.description);
+                }
+            }
+            else if (type == "sessionPool") {
+                SessionPool *sessionPool = _mgr->getSessionPool();
+                response["sessionPool"] = json::array();
+                for (auto &entry : *sessionPool) {
+                    response["sessionPool"].push_back(entry.second.name);
+                }
+            }
+        }
+        _io->sendPipe(response.dump().c_str());
+    }
+    
+    if (data.contains("configFile")) {
+        json &configFile = data["configFile"];
+        Utils::parseConfigFromJSON(configFile, *_cfg);
+        Utils::writeConfig(*_cfg);
+        _msgQueue->pushAndSignal(Msg{MsgType::CONFIG_CHANGED});
+    }
+}
+
+void Controller::makeStatusJSON(nlohmann::json &response) {
+    json status = json();
+    status["deviceConnected"] = _io->isSerialConnected();
+    status["comPorts"] = json::array();
+    for (string &portName : Utils::getSerialPorts()) {
+        status["comPorts"].push_back(portName);
+    }
+    response["status"] = status;
 }

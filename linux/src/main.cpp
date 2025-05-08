@@ -50,84 +50,6 @@ hideappind_t ind_hideAppInd = NULL;
 destroy_t ind_destroy = NULL;
 setclickcb_t ind_setClickCb = NULL; 
 
-json storeConfigToJSON(Config &cfg) {
-    json doc;
-    doc["port"] = cfg.port;
-    doc["baud"] = cfg.baud;
-    switch (cfg.parity)
-    {
-    case Config::Parity::EVEN:
-        doc["parity"] = "EVEN";
-        break;
-    case Config::Parity::ODD:
-        doc["parity"] = "ODD";
-        break;
-    default:
-        doc["parity"] = "NONE";
-        break;
-    }
-    doc["channels"] = json::array();
-    for (int i = 0; i < cfg.channels.size(); i++) {
-        json ch;
-        ch["id"] = i;
-        ch["sessions"] = json::array();
-        for (string &session : cfg.channels[i]) {
-            ch["sessions"].push_back(session);
-        }
-        doc["channels"].push_back(ch);
-    }
-    return doc;
-}
-
-void writeConfig(Config &cfg) {
-    LOG("writing config: " << CONFIG_PATH);
-    json data = storeConfigToJSON(cfg);
-    ofstream out(CONFIG_PATH);
-    out << data.dump(2);
-    out.close();
-}
-
-void parseConfigFromJSON(json &doc, Config &cfg) {
-    if (doc.contains("port")) {
-        cfg.port = doc["port"];
-    }
-    if (doc.contains("baud")) {
-        cfg.baud = doc["baud"];
-    }
-    if (doc.contains("parity")) {
-        string p = doc["parity"];
-        if (p == "NONE") cfg.parity = Config::Parity::NONE;
-        else if (p == "EVEN") cfg.parity = Config::Parity::EVEN;
-        else if (p == "ODD") cfg.parity = Config::Parity::ODD;
-    }
-    if (doc.contains("channels")) {
-        json &channels = doc["channels"];
-        cfg.channels.clear();
-        cfg.channels.resize(NUM_CHANNELS);
-        for (json &channel : channels) {
-            int id = channel["id"];
-            if (id < 0 || id >= NUM_CHANNELS) continue;
-            json sessions = channel["sessions"];
-            for (string session : sessions) {
-                cfg.channels[id].push_back(session);
-            }
-        }
-    }
-}
-
-void readConfig(Config &cfg) {
-    LOG("reading config: " << CONFIG_PATH);
-    ifstream in(CONFIG_PATH);
-    json raw;
-    try{
-        raw = json::parse(in);
-    } catch(json::parse_error& e) {
-        ERR(e.what());
-        return;
-    }
-    cfg.channels.resize(NUM_CHANNELS);
-    parseConfigFromJSON(raw, cfg);
-}
 
 void* signalThread(void *param) {
     int sig;
@@ -172,6 +94,7 @@ int main(int argc, char *argv[]) {
     LOG("running as: " << argv[0]);
     running = true;
 
+    // create paths
     string path = argv[0];
     int slashPos = path.find_last_of('/');
     if (slashPos != string::npos) {
@@ -197,6 +120,7 @@ int main(int argc, char *argv[]) {
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     pthread_create(&thSignal, NULL, signalThread, &set);
 
+    // load appind_lib if it exists
     hAppIndLib = dlopen(APPINDLIB_PATH.c_str(), RTLD_NOW);
     if (!hAppIndLib) {
         ERR(dlerror());
@@ -211,7 +135,8 @@ int main(int argc, char *argv[]) {
         ind_setClickCb = (setclickcb_t) dlsym(hAppIndLib, SETCLICKCB_NAME);
     }
 
-    readConfig(cfg);
+    cfg.CONFIG_PATH = CONFIG_PATH;
+    Utils::readConfig(cfg);
 
     msgQueue = make_shared<ThreadedQueue<Msg>>();
     io = make_shared<IO>(msgQueue, cfg);
@@ -225,7 +150,7 @@ int main(int argc, char *argv[]) {
     }
     io->reopenSerialPort();
 
-    controller = make_shared<Controller>(io, mgr, cfg);
+    controller = make_shared<Controller>(io, mgr, cfg, msgQueue);
 
     // create app indicator and its menu
     if (hAppIndLib) {
@@ -273,6 +198,7 @@ int main(int argc, char *argv[]) {
         case MsgType::PIPE_DISCONNECTED:
             break;
         case MsgType::PIPE_DATA:
+            controller->handlePipeData(msg.data);
             break;
 
         case MsgType::PA_CONTEXT_READY:
@@ -336,7 +262,10 @@ int main(int argc, char *argv[]) {
             kill(getpid(), SIGTERM);
             break;
 
-        
+        case MsgType::CONFIG_CHANGED:
+            io->configChanged(cfg);
+            controller->configChanged(cfg);
+            break;
         default:
             break;
         }
