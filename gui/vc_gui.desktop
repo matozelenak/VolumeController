@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Terminal=false
+Exec=/home/%USER%/.bin/vc/volumecontroller-gui-linux-x64/volumecontroller-gui --no-sandbox
+Name=Volume Controller GUI
+Comment=GUI for the Arduino Volume Controller project
+Icon=/home/%USER%/.bin/vc/volumecontroller-gui-linux-x64/vcgui_icon.png
+Keywords=volumecontroller;
+StartupWMClass=volumecontroller-gui
+StartupNotify=true
+DBusActivatable=false

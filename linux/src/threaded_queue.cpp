@@ -64,5 +64,10 @@ TEMPL void ThreadedQueue<T>::pushAndSignal(T element) {
     unlock();
 }
 
+TEMPL void ThreadedQueue<T>::clear() {
+    lock();
+    while (!_queue.empty()) _queue.pop();
+    unlock();
+}
 
 

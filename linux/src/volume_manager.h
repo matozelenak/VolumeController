@@ -9,7 +9,10 @@
 #include <pulse/volume.h>
 #include <pulse/introspect.h>
 #include <memory>
-#include <vector>
+#include <map>
+
+typedef std::map<int, Session> SessionPool;
+typedef std::map<int, Session> DevicePool;
 
 class VolumeManager {
 
@@ -24,32 +27,45 @@ public:
     void listSinks(bool lck = true, bool wait = false);
     void listSinkInputs(bool lck = true, bool wait = false);
 
-    void contextCallback(pa_context *c);
-    void listSinksCallback(pa_context *c, const pa_sink_info *i, int eol);
-    void processSink(const pa_sink_info *i);
-    void removeSink(int idx);
-    void listSinkInputsCallback(pa_context *c, const pa_sink_input_info *i, int eol);
-    void processSinkInput(const pa_sink_input_info *i);
-    void removeSinkInput(int idx);
-    void subscribeCallback(pa_context *c, pa_subscription_event_type_t t, uint32_t idx);
-
+    void setSinkVolume(int index, float volume, bool lck = true);
+    void setSinkMute(int index, bool mute, bool lck = true);
+    void setSinkInputVolume(int index, float volume, bool lck = true);
+    void setSinkInputMute(int index, bool mute, bool lck = true);
+    
     void lock();
     void unlock();
-
+    
     void listSinks_sync();
     void listSinkInputs_sync();
-
-    std::vector<Session> *getSessionPool();
-    std::vector<Session> *getDevicePool();
-
+    
+    std::map<int, Session> *getSessionPool();
+    std::map<int, Session> *getDevicePool();
+    int getDefaultSinkIndex();
+    void getDefSinkIdx(bool lck = true);
+    
 private:
+    void _contextCallback(pa_context *c);
+
+    void _listSinksCallback(pa_context *c, const pa_sink_info *i, int eol);
+    void _processSink(const pa_sink_info *i);
+    void _removeSink(int idx);
+
+    void _listSinkInputsCallback(pa_context *c, const pa_sink_input_info *i, int eol);
+    void _processSinkInput(const pa_sink_input_info *i);
+    void _removeSinkInput(int idx);
+
+    void _subscribeCallback(pa_context *c, pa_subscription_event_type_t t, uint32_t idx);
+    
+
     std::shared_ptr<ThreadedQueue<Msg>> _msgQueue;
     pa_threaded_mainloop *_mainloop;
     pa_context *_context;
     bool _isContextConnected;
-    std::vector<Session> _sessionPool;
-    std::vector<Session> _devicePool;
+    SessionPool _sessionPool;
+    DevicePool _devicePool;
 
     bool _listSinksInProgress;
     bool _listSinkInputsInProgress;
+    int _defaultSinkIndex;
+    bool _getDefSinkIdxInProgress;
 };

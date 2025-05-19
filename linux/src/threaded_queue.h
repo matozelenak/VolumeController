@@ -21,6 +21,7 @@ public:
     void push(T element);
     void pop();
     void pushAndSignal(T element);
+    void clear();
 
 private:
     std::queue<T> _queue;

@@ -21,6 +21,7 @@ const createWindow = () => {
     
     win.menuBarVisible = false;
     win.loadFile('index.html')
+    win.setIcon("vcgui_icon.png")
 }
 
 function handleConnectPipe(event) {

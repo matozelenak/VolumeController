@@ -14,6 +14,7 @@
 #include <cmath>
 #include <string>
 #include <sstream>
+#include <map>
 using namespace std;
 
 VolumeManager::VolumeManager(shared_ptr<ThreadedQueue<Msg>> msgQueue)
@@ -21,6 +22,8 @@ VolumeManager::VolumeManager(shared_ptr<ThreadedQueue<Msg>> msgQueue)
     _isContextConnected = false;
     _listSinksInProgress = false;
     _listSinkInputsInProgress = false;
+    _defaultSinkIndex = 0;
+    _getDefSinkIdxInProgress = false;
 }
 
 VolumeManager::~VolumeManager() {
@@ -29,26 +32,28 @@ VolumeManager::~VolumeManager() {
 
 bool VolumeManager::init() {
     _mainloop = pa_threaded_mainloop_new();
+    pa_threaded_mainloop_start(_mainloop);
+    lock();
+    
     _context = pa_context_new(pa_threaded_mainloop_get_api(_mainloop), APPLICATION_NAME);
     pa_context_set_state_callback(
         _context,
         [](pa_context* c, void* userdata) {
             VolumeManager* instance = static_cast<VolumeManager*>(userdata);
-            if (instance) instance->contextCallback(c);
+            if (instance) instance->_contextCallback(c);
         },
-        this);
+        this
+    );
     
     pa_context_set_subscribe_callback(
         _context,
         [](pa_context *c, pa_subscription_event_type_t t, uint32_t idx, void *userdata) {
             VolumeManager* instance = static_cast<VolumeManager*>(userdata);
-            if (instance) instance->subscribeCallback(c, t, idx);
+            if (instance) instance->_subscribeCallback(c, t, idx);
         },
         this
     );
 
-    pa_threaded_mainloop_start(_mainloop);
-    lock();
     pa_context_connect(_context, nullptr, PA_CONTEXT_NOFLAGS, nullptr);
     unlock();
     LOG("PulseAudio mainloop started");
@@ -61,9 +66,9 @@ void VolumeManager::stop() {
 
 void VolumeManager::wait() {
     LOG("stopping PulseAudio mainloop...");
+    pa_context_subscribe(_context, (pa_subscription_mask_t)NULL, NULL, NULL);
     pa_context_disconnect(_context);
     pa_threaded_mainloop_stop(_mainloop);
-    pa_threaded_mainloop_wait(_mainloop);
     pa_context_unref(_context);
     pa_threaded_mainloop_free(_mainloop);
 }
@@ -74,12 +79,14 @@ void VolumeManager::listSinks(bool lck, bool wait) {
     if (lck) lock();
     _listSinksInProgress = true;
     _devicePool.clear();
-    pa_context_get_sink_info_list(_context,
+    pa_operation *op = pa_context_get_sink_info_list(_context,
         [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
             VolumeManager* instance = static_cast<VolumeManager*>(userdata);
-            if (instance) instance->listSinksCallback(c, i, eol);
+            if (instance) instance->_listSinksCallback(c, i, eol);
         },
-        this);
+        this
+    );
+    pa_operation_unref(op);
     if (wait) while (_listSinksInProgress) pa_threaded_mainloop_wait(_mainloop);
     if (lck) unlock();
 }
@@ -90,34 +97,39 @@ void VolumeManager::listSinkInputs(bool lck, bool wait) {
     if (lck) lock();
     _listSinkInputsInProgress = true;
     _sessionPool.clear();
-    pa_context_get_sink_input_info_list(_context,
+    pa_operation *op = pa_context_get_sink_input_info_list(_context,
         [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
             VolumeManager* instance = static_cast<VolumeManager*>(userdata);
-            if (instance) instance->listSinkInputsCallback(c, i, eol);
+            if (instance) instance->_listSinkInputsCallback(c, i, eol);
         },
-        this);
+        this
+    );
+    pa_operation_unref(op);
     if (wait) while (_listSinkInputsInProgress) pa_threaded_mainloop_wait(_mainloop);
     if (lck) unlock();
 }
 
-void VolumeManager::contextCallback(pa_context *c) {
+void VolumeManager::_contextCallback(pa_context *c) {
     switch (pa_context_get_state(c))
     {
     case PA_CONTEXT_READY:
         LOG("PulseAudio context READY");
         _isContextConnected = true;
-        pa_context_subscribe(
-            _context,
-            (pa_subscription_mask_t) (PA_SUBSCRIPTION_MASK_SINK | PA_SUBSCRIPTION_MASK_SINK_INPUT),
-            [](pa_context *c, int success, void *userdata) {
-                if (success) {
-                    LOG("subscribed to sink input events");
-                } else {
-                    LOG("failed to subscribe to events");
-                }
-            },
-            nullptr
-        );
+        {
+            pa_operation *op = pa_context_subscribe(
+                _context,
+                (pa_subscription_mask_t) (PA_SUBSCRIPTION_MASK_SINK | PA_SUBSCRIPTION_MASK_SINK_INPUT | PA_SUBSCRIPTION_MASK_SERVER),
+                [](pa_context *c, int success, void *userdata) {
+                    if (success) {
+                        LOG("subscribed to events");
+                    } else {
+                        LOG("failed to subscribe to events");
+                    }
+                },
+                nullptr
+            );
+            pa_operation_unref(op);
+        }
         _msgQueue->pushAndSignal(Msg{MsgType::PA_CONTEXT_READY, "ready"});
         break;
     case PA_CONTEXT_FAILED:
@@ -136,12 +148,13 @@ void VolumeManager::contextCallback(pa_context *c) {
     }
 }
 
-void VolumeManager::listSinksCallback(pa_context *c, const pa_sink_info *i, int eol) {
+void VolumeManager::_listSinksCallback(pa_context *c, const pa_sink_info *i, int eol) {
     if (eol) {
         _listSinksInProgress = false;
         pa_threaded_mainloop_signal(_mainloop, 0);
         stringstream ss;
-        for (Session &dev : _devicePool) {
+        for (auto &entry : _devicePool) {
+            Session &dev = entry.second;
             ss << " device index #" << dev.index << "\n";
             ss << "  name: " << dev.name << "\n";
             ss << "  desc: " << dev.description << "\n";
@@ -152,10 +165,10 @@ void VolumeManager::listSinksCallback(pa_context *c, const pa_sink_info *i, int 
         _msgQueue->pushAndSignal(Msg{MsgType::LIST_SINKS_COMPLETE, ss.str()});
         return;
     }
-    processSink(i);
+    _processSink(i);
 }
 
-void VolumeManager::processSink(const pa_sink_info *i) {
+void VolumeManager::_processSink(const pa_sink_info *i) {
     pa_cvolume vol = i->volume;
     Session dev;
     dev.pid = -1;
@@ -168,30 +181,20 @@ void VolumeManager::processSink(const pa_sink_info *i) {
     dev.volume = floor((dev.volume / ((double)PA_VOLUME_NORM)) * 100.0) / 100.0;
     dev.muted = i->mute ? true : false;
 
-    for (int j = 0; j < _devicePool.size(); j++) {
-        if (_devicePool[j].index == dev.index) {
-            _devicePool[j] = dev;
-            return;
-        }
-    }
-    _devicePool.push_back(dev);
+    _devicePool[dev.index] = dev;
 }
 
-void VolumeManager::removeSink(int idx) {
-    for (int i = 0; i < _devicePool.size(); i++) {
-        if (_devicePool[i].index == idx) {
-            _devicePool.erase(_devicePool.begin() + i);
-            return;
-        }
-    }
+void VolumeManager::_removeSink(int idx) {
+    _devicePool.erase(idx);
 }
 
-void VolumeManager::listSinkInputsCallback(pa_context *c, const pa_sink_input_info *i, int eol) {
+void VolumeManager::_listSinkInputsCallback(pa_context *c, const pa_sink_input_info *i, int eol) {
     if (eol) {
         _listSinkInputsInProgress = false;
         pa_threaded_mainloop_signal(_mainloop, 0);
         stringstream ss;
-        for (Session &session : _sessionPool) {
+        for (auto &entry : _sessionPool) {
+            Session &session = entry.second;
             ss << " sink input index #" << session.index << "\n";
             ss << "  name: " << session.name << "\n";
             ss << "  desc: " << session.description << "\n";
@@ -202,15 +205,15 @@ void VolumeManager::listSinkInputsCallback(pa_context *c, const pa_sink_input_in
         _msgQueue->pushAndSignal(Msg{MsgType::LIST_SINK_INPUTS_COMPLETE, ss.str()});
         return;
     }
-    processSinkInput(i);
+    _processSinkInput(i);
 }
 
-void VolumeManager::processSinkInput(const pa_sink_input_info *i) {
+void VolumeManager::_processSinkInput(const pa_sink_input_info *i) {
     pa_cvolume vol = i->volume;
     Session session;
     session.pid = -1; // TODO
     session.index = i->index;
-    session.name = i->name;
+    session.name = pa_proplist_gets(i->proplist, "application.name");
     session.description = "-";
     if (vol.channels >= 2) session.volume = (vol.values[0] + vol.values[1]) / 2;
     else if (vol.channels >= 1) session.volume = vol.values[0];
@@ -218,97 +221,96 @@ void VolumeManager::processSinkInput(const pa_sink_input_info *i) {
     session.volume = floor((session.volume / ((double)PA_VOLUME_NORM)) * 100.0) / 100.0;
     session.muted = i->mute ? true : false;
 
-    for (int j = 0; j < _sessionPool.size(); j++) {
-        if (_sessionPool[j].index == session.index) {
-            _sessionPool[j] = session;
-            return;
-        }
-    }
-    _sessionPool.push_back(session);
+    _sessionPool[session.index] = session;
 }
 
-void VolumeManager::removeSinkInput(int idx) {
-    for (int i = 0; i < _sessionPool.size(); i++) {
-        if (_sessionPool[i].index == idx) {
-            _sessionPool.erase(_sessionPool.begin() + i);
-            return;
-        }
-    }
+void VolumeManager::_removeSinkInput(int idx) {
+    _sessionPool.erase(idx);
 }
 
 
-void VolumeManager::subscribeCallback(pa_context *c, pa_subscription_event_type_t t, uint32_t idx) {
+void VolumeManager::_subscribeCallback(pa_context *c, pa_subscription_event_type_t t, uint32_t idx) {
     pa_subscription_event_type_t facility = (pa_subscription_event_type_t) (t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK);
     pa_subscription_event_type_t eventType = (pa_subscription_event_type_t) (t & PA_SUBSCRIPTION_EVENT_TYPE_MASK);
 
     if (facility == PA_SUBSCRIPTION_EVENT_SINK) {
 
         if (eventType == PA_SUBSCRIPTION_EVENT_NEW) {
-            pa_context_get_sink_info_by_index(
+            pa_operation *op = pa_context_get_sink_info_by_index(
                 _context,
                 idx,
                 [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
                     if (eol) return;
                     VolumeManager *instance = static_cast<VolumeManager*>(userdata);
                     if (!instance) return;
-                    instance->processSink(i);
+                    instance->_processSink(i);
                     instance->_msgQueue->pushAndSignal(Msg{MsgType::SINK_ADDED, to_string(i->index)});
                 },
                 this
             );
+            pa_operation_unref(op);
         }
         else if (eventType == PA_SUBSCRIPTION_EVENT_CHANGE) {
-            pa_context_get_sink_info_by_index(
+            pa_operation *op = pa_context_get_sink_info_by_index(
                 _context,
                 idx,
                 [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
                     if (eol) return;
                     VolumeManager *instance = static_cast<VolumeManager*>(userdata);
                     if (!instance) return;
-                    instance->processSink(i);
+                    instance->_processSink(i);
                     instance->_msgQueue->pushAndSignal(Msg{MsgType::SINK_CHANGED, to_string(i->index)});
                 },
                 this
             );
+            pa_operation_unref(op);
         }
         else if (eventType == PA_SUBSCRIPTION_EVENT_REMOVE) {
-            removeSink(idx);
+            _removeSink(idx);
             _msgQueue->pushAndSignal(Msg{MsgType::SINK_REMOVED, to_string(idx)});
         }
     }
     else if (facility == PA_SUBSCRIPTION_EVENT_SINK_INPUT) {
 
         if (eventType == PA_SUBSCRIPTION_EVENT_NEW) {
-            pa_context_get_sink_input_info(
+            pa_operation *op = pa_context_get_sink_input_info(
                 _context,
                 idx,
                 [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
                     if (eol) return;
                     VolumeManager *instance = static_cast<VolumeManager*>(userdata);
                     if (!instance) return;
-                    instance->processSinkInput(i);
+                    instance->_processSinkInput(i);
                     instance->_msgQueue->pushAndSignal(Msg{MsgType::SINK_INPUT_ADDED, to_string(i->index)});
                 },
                 this
             );
+            pa_operation_unref(op);
         }
         else if (eventType == PA_SUBSCRIPTION_EVENT_CHANGE) {
-            pa_context_get_sink_input_info(
+            pa_operation *op = pa_context_get_sink_input_info(
                 _context,
                 idx,
                 [](pa_context *c, const pa_sink_input_info *i, int eol, void *userdata) {
                     if (eol) return;
                     VolumeManager *instance = static_cast<VolumeManager*>(userdata);
                     if (!instance) return;
-                    instance->processSinkInput(i);
+                    instance->_processSinkInput(i);
                     instance->_msgQueue->pushAndSignal(Msg{MsgType::SINK_INPUT_CHANGED, to_string(i->index)});
                 },
                 this
             );
+            pa_operation_unref(op);
         }
         else if (eventType == PA_SUBSCRIPTION_EVENT_REMOVE) {
-            removeSinkInput(idx);
+            _removeSinkInput(idx);
             _msgQueue->pushAndSignal(Msg{MsgType::SINK_INPUT_REMOVED, to_string(idx)});
+        }
+    }
+    else if (facility == PA_SUBSCRIPTION_EVENT_SERVER) {
+
+        if (eventType == PA_SUBSCRIPTION_EVENT_CHANGE) {
+            getDefSinkIdx(false);
         }
     }
 
@@ -330,10 +332,82 @@ void VolumeManager::listSinkInputs_sync() {
     listSinkInputs(true, true);
 }
 
-vector<Session> *VolumeManager::getSessionPool() {
+SessionPool *VolumeManager::getSessionPool() {
     return &_sessionPool;
 }
 
-vector<Session> *VolumeManager::getDevicePool() {
+DevicePool *VolumeManager::getDevicePool() {
     return &_devicePool;
+}
+
+int VolumeManager::getDefaultSinkIndex() {
+    return _defaultSinkIndex;
+}
+
+void VolumeManager::setSinkVolume(int index, float volume, bool lck) {
+    if (lck) lock();
+    if (_devicePool.count(index)) {
+        pa_cvolume vol;
+        pa_cvolume_set(&vol, 2, volume * PA_VOLUME_NORM);
+
+        pa_operation *op = pa_context_set_sink_volume_by_index(_context, index, &vol, NULL, NULL);
+        pa_operation_unref(op);
+    }
+    if (lck) unlock();
+}
+
+void VolumeManager::setSinkMute(int index, bool mute, bool lck) {
+    if (lck) lock();
+    if (_devicePool.count(index)) {
+        pa_operation *op = pa_context_set_sink_mute_by_index(_context, index, mute ? 1 : 0, NULL, NULL);
+        pa_operation_unref(op);
+    }
+    if (lck) unlock();
+}
+
+void VolumeManager::setSinkInputVolume(int index, float volume, bool lck) {
+    if (lck) lock();
+    if (_sessionPool.count(index)) {
+        pa_cvolume vol;
+        pa_cvolume_set(&vol, 2, volume * PA_VOLUME_NORM);
+
+        pa_operation *op = pa_context_set_sink_input_volume(_context, index, &vol, NULL, NULL);
+        pa_operation_unref(op);
+    }
+    if (lck) unlock();
+}
+
+void VolumeManager::setSinkInputMute(int index, bool mute, bool lck) {
+    if (lck) lock();
+    if (_sessionPool.count(index)) {
+        pa_operation *op = pa_context_set_sink_input_mute(_context, index, mute ? 1 : 0, NULL, NULL);  
+        pa_operation_unref(op);
+    }
+    if (lck) unlock();
+}
+
+void VolumeManager::getDefSinkIdx(bool lck) {
+    _getDefSinkIdxInProgress = true;
+    if(lck) lock();
+    pa_operation *op = pa_context_get_sink_info_by_name(
+        _context,
+        "@DEFAULT_SINK@",
+        [](pa_context *c, const pa_sink_info *i, int eol, void *userdata) {
+            if (eol) return;
+            VolumeManager *instance = static_cast<VolumeManager*>(userdata);
+            if (!instance) return;
+            if (instance->_defaultSinkIndex != i->index) {
+                bool sendMsg = true;
+                if (instance->_defaultSinkIndex == 0) sendMsg = false;
+                instance->_defaultSinkIndex = i->index;
+                if (sendMsg) instance->_msgQueue->pushAndSignal(Msg{MsgType::DEFAULT_SINK_CHANGED, to_string(i->index)});
+            }
+            instance->_getDefSinkIdxInProgress = false;
+            pa_threaded_mainloop_signal(instance->_mainloop, 0);
+        },
+        this
+    );
+    pa_operation_unref(op);
+    if(lck) while (_getDefSinkIdxInProgress) pa_threaded_mainloop_wait(_mainloop);
+    if(lck) unlock();
 }

@@ -1,6 +1,7 @@
 #include "io.h"
 #include "threaded_queue.h"
 #include "msg.h"
+#include "config.h"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -17,28 +18,40 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <libudev.h>
 
-IO::IO(std::shared_ptr<ThreadedQueue<Msg>> msgQueue)
+using namespace std;
+
+IO::IO(shared_ptr<ThreadedQueue<Msg>> msgQueue, Config &cfg)
     :_msgQueue(msgQueue) {
     _fdSerialPort = -1;
     _isSerialConnected = false;
     _running = false;
+    _isPipeConnected = false;
+    _fdGUIClient = -1;
 
     _fdSocket = -1;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, PIPE_PATH, sizeof(addr.sun_path)-1);
+
+    _serialPortName = cfg.port;
+    _baudRate = cfg.baud;
+    _parity = cfg.parity;
+
+    _udev = udev_new();
+    _udev_monitor = udev_monitor_new_from_netlink(_udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(_udev_monitor, "tty", NULL);
+    udev_monitor_enable_receiving(_udev_monitor);
 }
 
 IO::~IO() {
     _closeSerialPort();
+    udev_monitor_unref(_udev_monitor);
+    udev_unref(_udev);
 }
 
 bool IO::init() {
-    // temporary
-    _serialPortName = "/dev/ttyUSB0";
-    _baudRate = 115200;
-
     _running = true;
     _reinitSerial = false;
 
@@ -165,11 +178,25 @@ bool IO::_setSerialParams() {
     tty.c_cflag &= ~CSTOPB;  // 1 stop bit
     tty.c_cflag &= ~CSIZE;   // clear data size bits
     tty.c_cflag |= CS8;      // 8 data bits
-    tty.c_cflag |= PARENB;   // enable parity
-    tty.c_cflag &= ~PARODD;  // set even parity
     tty.c_cflag &= ~CRTSCTS; // disable hardware flow control
     tty.c_cflag |= CREAD;    // enable receiver
     tty.c_cflag &= ~CLOCAL;  // allow modem control lines
+
+    switch (_parity)
+    {
+    case Config::Parity::EVEN:
+        tty.c_cflag |= PARENB;
+        tty.c_cflag &= ~PARODD;
+        break;
+    case Config::Parity::ODD:
+        tty.c_cflag |= PARENB;
+        tty.c_cflag |= PARODD;
+        break;
+    default:
+        tty.c_cflag &= ~PARENB;
+        tty.c_cflag &= ~PARODD;
+        break;
+    }
 
     tty.c_cc[VMIN] = 1;  // must read at least 1 byte
     tty.c_cc[VTIME] = 0; // timeout
@@ -194,15 +221,16 @@ bool IO::_setSerialParams() {
 void IO::_threadRoutine(void* param) {
     LOG("IO thread started");
 
-    // serialPort, serverSocket, guiClientSocket, cliClientSocket (maybe)
+    // serialPort, serverSocket, guiClientSocket, udev
     const int POLL_FDSIZE = 4;
     pollfd fds[POLL_FDSIZE];
     for (int i = 0; i < POLL_FDSIZE; i++) {
         fds[i].fd = -1;
         fds[i].events = POLLIN;
     }
-    fds[1].fd = _fdSocket;
     fds[1].events = POLLIN;
+    fds[3].fd = udev_monitor_get_fd(_udev_monitor);
+    fds[3].events = POLLIN;
     char comBuffer[1024];
     int comBufferPosition = 0;
     while (_running) {
@@ -213,6 +241,9 @@ void IO::_threadRoutine(void* param) {
 
         if (_isSerialConnected) fds[0].fd = _fdSerialPort;
         else fds[0].fd = -1;
+
+        if (!_isPipeConnected) fds[1].fd = _fdSocket;
+        else fds[1].fd = -1;
 
         int numFDs = poll(fds, POLL_FDSIZE, 1000);
         if (numFDs == -1) {
@@ -229,14 +260,15 @@ void IO::_threadRoutine(void* param) {
                 }
                 else if (bytesRead == 0) {
                     LOG("read() returned 0");
+                    _closeSerialPort();
                 }
                 else {
                     if (c == '\n') {
                         comBuffer[comBufferPosition] = '\0';
-                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
+                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, string(comBuffer)});
                         comBufferPosition = 0;
                     }
-                    else {
+                    else if (c > 0 && c != '\r') {
                         comBuffer[comBufferPosition] = c;
                         comBufferPosition++;
                     }
@@ -244,7 +276,7 @@ void IO::_threadRoutine(void* param) {
                     if (comBufferPosition == sizeof(comBuffer)-1) {
                         // the buffer is full, output it
                         comBuffer[comBufferPosition] = '\0';
-                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, std::string(comBuffer)});
+                        _msgQueue->pushAndSignal(Msg{MsgType::SERIAL_DATA, string(comBuffer)});
                         comBufferPosition = 0;
                     }
                 }
@@ -258,6 +290,8 @@ void IO::_threadRoutine(void* param) {
                 } else {
                     fds[2].fd = clientFd;
                     LOG("client accepted, fd: " << clientFd);
+                    _isPipeConnected = true;
+                    _fdGUIClient = clientFd;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_CONNECTED, ""});
                 }
             }
@@ -270,18 +304,36 @@ void IO::_threadRoutine(void* param) {
                     ERR("socket read()");
                     close(fds[2].fd);
                     fds[2].fd = -1;
+                    _isPipeConnected = false;
+                    _fdGUIClient = -1;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else if (bytesRead == 0) {
                     LOG("socket read() returned 0");
                     close(fds[2].fd);
                     fds[2].fd = -1;
+                    _isPipeConnected = false;
+                    _fdGUIClient = -1;
                     _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DISCONNECTED, ""});
                 }
                 else {
                     buffer[bytesRead] = '\0';
-                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DATA, std::string(buffer)});
+                    _msgQueue->pushAndSignal(Msg{MsgType::PIPE_DATA, string(buffer)});
                 }
+            }
+
+            // udev
+            if (fds[3].revents & POLLIN) {
+                udev_device *dev = udev_monitor_receive_device(_udev_monitor);
+                if (dev) {
+                    string action = udev_device_get_action(dev);
+                    string devnode = udev_device_get_devnode(dev);
+                    if (action == "add" && devnode == _serialPortName) {
+                        LOG("device " << _serialPortName << " connected");
+                        reopenSerialPort();
+                    }
+                }
+                udev_device_unref(dev);
             }
         }
     } // end while running
@@ -295,4 +347,54 @@ void IO::_threadRoutine(void* param) {
     }
     unlink(PIPE_PATH);
     _closeSerialPort();
+}
+
+void IO::sendSerial(const char *data) {
+    if (!_isSerialConnected) return;
+    int bytesRemaining = strlen(data);
+    int pointer = 0;
+    do {
+        int bytesWritten = write(_fdSerialPort, data+pointer, bytesRemaining);
+        if (bytesWritten == -1) {
+            ERR("write() serial");
+            break;
+        }
+        bytesRemaining -= bytesWritten;
+        pointer += bytesWritten;
+    } while (bytesRemaining > 0);
+}
+
+void IO::configChanged(Config &cfg) {
+    bool change = false;
+    if (_serialPortName != cfg.port) {
+        _serialPortName = cfg.port;
+        change = true;
+    }
+    if (_baudRate != cfg.baud) {
+        _baudRate = cfg.baud;
+        change = true;
+    }
+    if (_parity != cfg.parity) {
+        _parity = cfg.parity;
+        change = true;
+    }
+    if (change) {
+        LOG("[IO] config changed");
+        reopenSerialPort();
+    }   
+}
+
+void IO::sendPipe(const char *data) {
+    if (!_isPipeConnected) return;
+    int bytesRemaining = strlen(data);
+    int pointer = 0;
+    do {
+        int bytesWritten = write(_fdGUIClient, data+pointer, bytesRemaining);
+        if (bytesWritten == -1) {
+            ERR("write() pipe");
+            break;
+        }
+        bytesRemaining -= bytesWritten;
+        pointer += bytesWritten;
+    } while (bytesRemaining > 0);
 }
