@@ -36,6 +36,7 @@ public:
 
     void handlePipeData(std::string &str);
     void makeStatusJSON(nlohmann::json &response);
+    void makeCompleteJSON(nlohmann::json &data);
 
 private:
     std::shared_ptr<IO> _io;

@@ -26,8 +26,9 @@ vector<string> Utils::getSerialPorts() {
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type != DT_CHR) continue;
         string name = entry->d_name;
-        if (name.find("ttyUSB") == string::npos) continue;
-        result.push_back(name);
+        if ((name.find("ttyUSB") == string::npos) &&
+            (name.find("ttyACM") == string::npos)) continue;
+        result.push_back(string("/dev/") + name);
     }
 
     return result;

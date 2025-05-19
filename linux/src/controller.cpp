@@ -71,6 +71,11 @@ void Controller::defaultSinkChanged() {
 }
 
 void Controller::addDevice(int index, bool update) {
+    if (update) {
+        json data;
+        makeCompleteJSON(data);
+        _io->sendPipe(data.dump().c_str());
+    }
     Session &device = _mgr->getDevicePool()->operator[](index);
     for (int i = 0; i < _channelMap.size(); i++) {
         vector<string> &channelApps = _channelMap[i];
@@ -92,6 +97,11 @@ void Controller::addDevice(int index, bool update) {
 }
 
 void Controller::addSession(int index, bool update) {
+    if (update) {
+        json data;
+        makeCompleteJSON(data);
+        _io->sendPipe(data.dump().c_str());
+    }
     Session &session = _mgr->getSessionPool()->operator[](index);
     for (int i = 0; i < _channelMap.size(); i++) {
         vector<string> &channelApps = _channelMap[i];
@@ -157,7 +167,7 @@ void Controller::parseData(string &data) {
                 int val;
                 if (!Utils::parseCmd1Value(data, cmd, ch, val)) break;
                 _channels[ch].setMute(val);
-                LOG("cmd: " << cmd << " ch " << ch << " val " << val);
+                // LOG("cmd: " << cmd << " ch " << ch << " val " << val);
             }
             break;
         case CMDTYPE::VOLUME:
@@ -167,7 +177,7 @@ void Controller::parseData(string &data) {
                 int val;
                 if (!Utils::parseCmd1Value(data, cmd, ch, val)) break;
                 _channels[ch].setVolume(val/100.0);
-                LOG("cmd: " << cmd << " ch " << ch << " val " << val);
+                // LOG("cmd: " << cmd << " ch " << ch << " val " << val);
             }
             else {
                 char cmd;
@@ -275,4 +285,19 @@ void Controller::makeStatusJSON(nlohmann::json &response) {
         status["comPorts"].push_back(portName);
     }
     response["status"] = status;
+}
+
+void Controller::makeCompleteJSON(nlohmann::json &data) {
+    makeStatusJSON(data["status"]);
+    data["configFile"] = Utils::storeConfigToJSON(*_cfg);
+    DevicePool *devicePool = _mgr->getDevicePool();
+    data["devicePool"] = json::array();
+    for (auto &entry : *devicePool) {
+        data["devicePool"].push_back(entry.second.description);
+    }
+    SessionPool *sessionPool = _mgr->getSessionPool();
+    data["sessionPool"] = json::array();
+    for (auto &entry : *sessionPool) {
+        data["sessionPool"].push_back(entry.second.name);
+    }
 }

@@ -68,8 +68,8 @@ void* signalThread(void *param) {
 }
 
 void printSinkInputInfo(int index) {
-        Session &session = mgr->getSessionPool()->operator[](index);
-        LOG("[SINK INPUT] " << session.name << " " << session.volume << " " << session.muted);
+    Session &session = mgr->getSessionPool()->operator[](index);
+    DBG("[SINK INPUT] " << session.name << " " << session.volume << " " << session.muted);
 }
 
 void clickCallback(string label, void *data) {
@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
         Msg msg = msgQueue->front();
         msgQueue->pop();
         msgQueue->unlock();
-        LOG("[MSG] " << (int) msg.type << " data: '" << msg.data << "'");
+        DBG("[MSG] " << (int) msg.type << " data: '" << msg.data << "'");
         switch (msg.type)
         {
         case MsgType::EXIT:
@@ -184,28 +184,44 @@ int main(int argc, char *argv[]) {
             goto end_while;
 
         case MsgType::SERIAL_CONNECTED:
+            LOG("[EVENT] serial connect");
             ind_setIcon(ICON2_PATH);
+            {
+                json data;
+                controller->makeStatusJSON(data);
+                io->sendPipe(data.dump().c_str());
+            }
             break;
         case MsgType::SERIAL_DISCONNECTED:
+            LOG("[EVENT] serial disconnect");
             ind_setIcon(ICON1_PATH);
+            {
+                json data;
+                controller->makeStatusJSON(data);
+                io->sendPipe(data.dump().c_str());
+            }
             break;
         case MsgType::SERIAL_DATA:
             controller->parseData(msg.data);
             break;
 
         case MsgType::PIPE_CONNECTED:
+            LOG("[EVENT] pipe connect");
             break;
         case MsgType::PIPE_DISCONNECTED:
+            LOG("[EVENT] pipe disconnect");
             break;
         case MsgType::PIPE_DATA:
             controller->handlePipeData(msg.data);
             break;
 
         case MsgType::PA_CONTEXT_READY:
+            LOG("[EVENT] PA context ready");
             mgr->getDefSinkIdx();
             controller->remapChannels();
             break;
         case MsgType::PA_CONTEXT_DISCONNECTED:
+            LOG("[EVENT] PA context disconnect");
             break;
 
         case MsgType::SINK_ADDED:
@@ -213,7 +229,7 @@ int main(int argc, char *argv[]) {
             controller->addDevice(stoi(msg.data));
             break;
         case MsgType::SINK_CHANGED:
-            LOG("[EVENT] sink #" << msg.data << " changed");
+            DBG("[EVENT] sink #" << msg.data << " changed");
             break;
         case MsgType::SINK_REMOVED:
             LOG("[EVENT] sink #" << msg.data << " removed");
@@ -226,7 +242,7 @@ int main(int argc, char *argv[]) {
             controller->addSession(stoi(msg.data));
             break;
         case MsgType::SINK_INPUT_CHANGED:
-            LOG("[EVENT] sink input #" << msg.data << " changed");
+            DBG("[EVENT] sink input #" << msg.data << " changed");
             printSinkInputInfo(stoi(msg.data));
             break;
         case MsgType::SINK_INPUT_REMOVED:
@@ -263,6 +279,7 @@ int main(int argc, char *argv[]) {
             break;
 
         case MsgType::CONFIG_CHANGED:
+            LOG("[EVENT] config changed");
             io->configChanged(cfg);
             controller->configChanged(cfg);
             break;

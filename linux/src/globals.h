@@ -1,13 +1,20 @@
 #pragma once
 
 #define DEBUG_OUTPUT
+#define INFO_OUTPUT
 
-#ifdef DEBUG_OUTPUT
+#ifdef INFO_OUTPUT
     #define LOG(x) std::cout << x << std::endl;
     #define ERR(x) std::cerr << "[ERROR] " << x << ": " << strerror(errno) << std::endl;
 #else
     #define LOG(x) 
     #define ERR(x) 
+#endif
+
+#ifdef DEBUG_OUTPUT
+    #define DBG(x) std::cout << x << std::endl; 
+#else
+    #define DBG(x) 
 #endif
 
 #define PIPE_PATH "/tmp/VolumeControllerPipe"
