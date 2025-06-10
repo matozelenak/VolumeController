@@ -154,13 +154,14 @@ int main(int argc, char *argv[]) {
 
     // create app indicator and its menu
     if (hAppIndLib) {
-        ind_libraryInit(argc, argv, "VolumeControllerDaemon", ICON1_PATH); // TODO change icon
-        ind_addMenuItem("Open GUI");
+        ind_libraryInit(argc, argv, "VolumeControllerDaemon", ICON1_PATH);
+        ind_setIcon(ICON1_PATH);
+        ind_addMenuItem("Open GUI", ICON2_PATH);
         ind_addMenuSep();
-        ind_addMenuItem("Rescan sessions");
-        ind_addMenuItem("Reconnect");
+        ind_addMenuItem("Rescan sessions", "view-refresh-symbolic");
+        ind_addMenuItem("Reconnect", "media-eject-symbolic");
         ind_addMenuSep();
-        ind_addMenuItem("Exit");
+        ind_addMenuItem("Exit", "application-exit");
         ind_showAppInd();
 
         ind_setClickCb(&clickCallback, NULL);
