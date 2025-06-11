@@ -37,7 +37,7 @@ void setIcon(std::string icon) {
     app_indicator_set_icon(appind::_indicator, icon.c_str());
 }
 
-void addMenuItem(std::string label) {
+void addMenuItem(std::string label, std::string icon) {
     GtkWidget *item = gtk_menu_item_new_with_label(label.c_str());
     gtk_menu_shell_append(GTK_MENU_SHELL(appind::_menu), item);
     g_signal_connect(item, "activate", G_CALLBACK(appind::item_clicked), NULL);

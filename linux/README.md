@@ -20,10 +20,27 @@ V priečinku **linux** stačí spustiť:
     chmod +x ./install.sh
     ./install.sh
 
-Ak Váš systém používa knižnicu ***libayatana-appindicator3-1***, môžete ešte skompilovať dynamickú knižnicu, ktorá umožní programu zobrazovať ikonu v system-tray:
+Ak Váš systém používa niektorú s nasledovných knižníc, môžete ešte skompilovať dynamickú knižnicu, ktorá umožní programu zobrazovať ikonu v system-tray:
+
+---
+
+- ***libayatana-appindicator3-1***
+
+---
 
     sudo apt install libayatana-appindicator3-dev
     make ayatana-appind_lib
+    systemctl --user stop volume_controller.service
+    ./install.sh
+
+---
+
+- ***Qt framework***
+
+---
+
+    sudo apt install qtbase5-dev qtbase5-dev-tools
+    make qt-appind_lib
     systemctl --user stop volume_controller.service
     ./install.sh
 

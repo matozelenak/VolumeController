@@ -22,6 +22,9 @@ $(OUT_DIR)/%.o: $(SRC_DIR)/%.cpp makefile
 ayatana-appind_lib:
 	g++ -shared -fPIC -o $(OUT_DIR)/$(APPIND_LIB_COMMON_NAME) $(SRC_DIR)/$@/$@.cpp `pkg-config --cflags --libs ayatana-appindicator3-0.1`
 
+qt-appind_lib:
+	g++ -shared -fPIC -o $(OUT_DIR)/$(APPIND_LIB_COMMON_NAME) $(SRC_DIR)/$@/$@.cpp -I/usr/include/x86_64-linux-gnu/qt5/ -lQt5Widgets -lQt5Gui -lQt5Core
+
 clean:
 	rm $(OBJECTS) $(DEPENDS) $(OUT_DIR)/volume_controller || true
 	rm $(OUT_DIR)/$(APPIND_LIB_COMMON_NAME) || true

@@ -14,7 +14,7 @@ const char* SETCLICKCB_NAME = "setClickCallback";
 
 typedef void (*libinit_t)(int, char*[], std::string, std::string);
 typedef void (*seticon_t)(std::string);
-typedef void (*addmenuitem_t)(std::string);
+typedef void (*addmenuitem_t)(std::string, std::string);
 typedef void (*addmenusep_t)();
 typedef void (*showappind_t)();
 typedef void (*hideappind_t)();
@@ -25,7 +25,7 @@ typedef void (*setclickcb_t)(click_cb, void*);
 extern "C" {
     void libraryInit(int argc, char *argv[], std::string appName, std::string icon);
     void setIcon(std::string icon);
-    void addMenuItem(std::string label);
+    void addMenuItem(std::string label, std::string icon);
     void addMenuSeparator();
     void showAppIndicator();
     void hideAppIndicator();
